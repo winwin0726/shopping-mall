@@ -1,0 +1,21 @@
+{
+  "name": "AI HQ Store",
+  "short_name": "AI Store",
+  "description": "Premium AI-powered Fashion E-Commerce",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

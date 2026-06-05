@@ -1,0 +1,58 @@
+# =====================================================
+#  비밀/민감 파일 — 절대 커밋 금지
+# =====================================================
+.env
+*.env
+!*.env.example
+**/.env
+auth_state.json
+**/secrets.json
+**/license.json
+**/profile_key.key
+**/telegram_config.json
+*.key
+frontend/.env*.local
+
+# =====================================================
+#  Python
+# =====================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+backend/venv/
+venv/
+ENV/
+
+# =====================================================
+#  Node / Next.js
+# =====================================================
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# =====================================================
+#  대용량 AI 모델 (재다운로드: backend/ai_engine/download_model.py)
+# =====================================================
+*.onnx
+backend/ai_engine/models/.u2net/
+
+# =====================================================
+#  런타임 데이터/산출물 (기본 제외 — 필요 시 git add -f 로 포함)
+# =====================================================
+*.db
+backend/uploads/
+backend/crawler/winwin_engine/temp_downloads/
+
+# =====================================================
+#  로그 / OS / IDE
+# =====================================================
+*.log
+backend_error.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

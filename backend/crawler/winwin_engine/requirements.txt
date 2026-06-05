@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+pywebview
+selenium
+undetected_chromedriver
+google-genai
+Pillow
+openpyxl
+requests
+PyQt5
+websockets
+beautifulsoup4
+python-dotenv
+
+cryptography
+playwright
+playwright-stealth

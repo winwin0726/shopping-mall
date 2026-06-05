@@ -1,0 +1,74 @@
+# 운영 및 백업 데이터
+TEMP_CRAWLED/
+temp_data_images/
+temp_kakao_images/
+weishang.db
+
+# 브라우저 프로필 및 세션 데이터
+*_profile_*
+kakao_profile_*
+band_profile_*
+profiles/
+
+# 민감 정보 및 키
+.env
+profiles.json
+auth_state.json
+backend/license.json
+backend/telegram_config.json
+backend/profile_key.key
+backend/secrets.json
+
+# 로컬 DB 및 런타임 상태
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+backend/*.db
+auth_server/*.db
+backend/user_post_history*.json
+backend/style_analysis_cache*.json
+weishang_vendors.json
+diagnostics/
+
+# 파이썬 및 빌드 잔재물
+__pycache__/
+*.pyc
+dist/
+build/
+*.spec
+!main_web.spec
+
+# Node.js 패키지
+node_modules/
+
+# 로그 및 덤프 파일
+*.log
+*.html
+*.txt
+!requirements.txt
+
+# 수집 이미지/상품 산출물
+UPDATE/
+
+# 실험용 백업 스크립트 보관소
+archive_scripts/
+
+# 로컬 임시 이미지 및 스크린샷
+*.png
+
+# 임시 디버그 데이터 및 백업 파일
+*.bak
+auth_state.json.bak
+error_dumps/
+data/
+backend/ai_dynamic_overrides.json
+backend/ai_learning_history/
+backend/analysis_history.py
+backend/debug_dump.json
+backend/platforms/weishang/crawler.py.backup_broken
+temp_vendor.json
+sample_product.json
+system_settings.json
+*.code-workspace
+
