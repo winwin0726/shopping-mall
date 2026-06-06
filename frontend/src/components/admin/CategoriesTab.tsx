@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import {
@@ -12,10 +12,12 @@ interface Category {
   name: string;
   slug: string;
   parent_id: number | null;
+  margin_type?: string;   // 'percent' | 'fixed' (윈윈 도킹: 도매가→소매가 마진)
+  margin_value?: number;  // percent면 %, fixed면 원
 }
 
 export default function CategoriesTab() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function CategoriesTab() {
   const [newSlug, setNewSlug] = useState("");
   const [newParentId, setNewParentId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
+  const [savingMargin, setSavingMargin] = useState<number | null>(null);  // 윈윈 도킹 마진 저장중
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -88,6 +91,59 @@ export default function CategoriesTab() {
     }
   };
 
+  // [윈윈 도킹] 카테고리 마진 로컬 수정 + 저장
+  const updateCatField = (id: number, field: "margin_type" | "margin_value", val: any) => {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: val } : c)));
+  };
+
+  const saveMargin = async (cat: Category) => {
+    setSavingMargin(cat.id);
+    try {
+      const res = await authFetch(`${apiUrl}/api/admin/category/${cat.id}/margin?recompute=true`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          margin_type: cat.margin_type || "percent",
+          margin_value: Number(cat.margin_value ?? 30),
+        }),
+      });
+      if (!res.ok) throw new Error("마진 저장에 실패했습니다.");
+      const d = await res.json();
+      alert(`✅ "${cat.name}" 마진 저장 완료 (기존 상품 ${d.recomputed_products ?? 0}개 소매가 재계산)`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingMargin(null);
+    }
+  };
+
+  // 카테고리별 마진 편집 컨트롤 (도매가 + 마진 = 소매가. %면 천원 올림)
+  const renderMargin = (cat: Category) => (
+    <div className="flex items-center gap-1 shrink-0" title="윈윈 도매가에 얹을 소매 마진 (%면 천원 단위 올림)">
+      <input
+        type="number"
+        value={cat.margin_value ?? 30}
+        onChange={(e) => updateCatField(cat.id, "margin_value", e.target.value === "" ? "" : Number(e.target.value))}
+        className="w-14 bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-white text-xs text-right focus:outline-none focus:border-emerald-500"
+      />
+      <select
+        value={cat.margin_type ?? "percent"}
+        onChange={(e) => updateCatField(cat.id, "margin_type", e.target.value)}
+        className="bg-slate-800 border border-slate-700 rounded px-1 py-1 text-white text-xs focus:outline-none focus:border-emerald-500"
+      >
+        <option value="percent">%</option>
+        <option value="fixed">원</option>
+      </select>
+      <button
+        onClick={() => saveMargin(cat)}
+        disabled={savingMargin === cat.id}
+        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2 py-1 rounded font-bold disabled:opacity-50"
+      >
+        {savingMargin === cat.id ? "..." : "저장"}
+      </button>
+    </div>
+  );
+
   // 트리 구조 가공
   const topLevel = categories.filter((c) => !c.parent_id);
   const getChildren = (parentId: number) => categories.filter((c) => c.parent_id === parentId);
@@ -99,7 +155,7 @@ export default function CategoriesTab() {
         <div>
           <h2 className="text-2xl font-bold text-white mb-1 tracking-tight">카테고리 관리 (Categories)</h2>
           <p className="text-slate-400 text-sm">
-            대분류/중분류 카테고리를 생성하고 관리합니다. 총 <span className="text-white font-bold">{categories.length}</span>개
+            대분류/중분류 카테고리를 생성·관리하고, <span className="text-emerald-400 font-semibold">카테고리별 소매 마진</span>(윈윈 도매가 → 소매가)을 설정합니다. 총 <span className="text-white font-bold">{categories.length}</span>개
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -215,13 +271,16 @@ export default function CategoriesTab() {
                       <p className="text-xs text-slate-500 font-mono">/{parent.slug}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(parent.id, parent.name)}
-                    className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition"
-                    title="삭제"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {renderMargin(parent)}
+                    <button
+                      onClick={() => handleDelete(parent.id, parent.name)}
+                      className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition"
+                      title="삭제"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* 하위 카테고리 리스트 */}
@@ -237,12 +296,15 @@ export default function CategoriesTab() {
                           <span className="text-slate-300">{child.name}</span>
                           <span className="text-xs text-slate-600 font-mono">/{child.slug}</span>
                         </div>
-                        <button
-                          onClick={() => handleDelete(child.id, child.name)}
-                          className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {renderMargin(child)}
+                          <button
+                            onClick={() => handleDelete(child.id, child.name)}
+                            className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
