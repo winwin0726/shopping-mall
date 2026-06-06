@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Header, Query
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Header, Query, Request
 import re
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -278,6 +278,37 @@ def update_crawler_settings(payload: CrawlerSettingsUpdate, db: Session = Depend
     safe["kakaoPw"] = ""
     safe["bandPw"] = ""
     return {"status": "success", "message": "크롤러 연동 설정이 성공적으로 저장되었습니다.", "settings": safe}
+
+# 2-1. 윈윈크롤러 자동 연결(페어링) API
+class CrawlerPairRequest(BaseModel):
+    token: str
+
+@router.post("/pair")
+def pair_crawler(payload: CrawlerPairRequest, request: Request, db: Session = Depends(get_db)):
+    """ 윈윈크롤러 자동 연결(페어링): 동일 PC(localhost)에서만 보안 토큰을 1클릭 동기화.
+    관리자 로그인 없이 winwin → LUXAI 토큰을 맞춰주기 위한 전용 통로.
+    보안 경계: localhost(127.0.0.1) 요청만 허용 → 외부 노출 환경에서는 차단된다. """
+    client_host = request.client.host if request.client else ""
+    if client_host not in ("127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"):
+        raise HTTPException(status_code=403, detail=f"자동 페어링은 동일 PC(localhost)에서만 허용됩니다. (요청 출처: {client_host})")
+    token = (payload.token or "").strip()
+    if len(token) < 8:
+        raise HTTPException(status_code=400, detail="토큰은 8자 이상이어야 합니다.")
+    if token == "LUXAI-WINWIN-TOKEN-1234":
+        raise HTTPException(status_code=400, detail="기본 토큰은 보안상 사용할 수 없습니다. 고유한 토큰을 사용하세요.")
+    hq = db.query(Tenant).filter(Tenant.domain == "hq.mall.com").first()
+    if not hq:
+        raise HTTPException(status_code=404, detail="HQ 테넌트를 찾을 수 없습니다.")
+    # 기존 update_crawler_settings 와 동일하게 새 dict 재구성(JSON 변경 감지)
+    theme = dict(hq.theme_config or {})
+    cs = dict(theme.get("crawlerSettings", {}) or {})
+    cs["securityToken"] = token
+    cs["enabled"] = True
+    theme["crawlerSettings"] = cs
+    hq.theme_config = theme
+    db.commit()
+    logger.info(f"[PAIR] 윈윈크롤러 자동 연결 완료 (localhost). token_len={len(token)}")
+    return {"status": "success", "message": "윈윈크롤러와 자동 연결되었습니다.", "enabled": True}
 
 # 3. 크롤러 데이터 AI 해석 테스트 API
 @router.post("/test-mapping")
