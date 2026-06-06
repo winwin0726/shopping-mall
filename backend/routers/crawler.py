@@ -14,6 +14,7 @@ from backend.database import SessionLocal, get_db
 from backend.models import HQProduct, Category, Tenant, User
 from backend.config import settings
 from backend.utils.deps import get_current_admin
+from backend.utils.gemini import generate_text, GeminiError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,70 @@ crawler_engine = CrawlerEngine(headless=True)
 ai_pipeline = AITranslatorPipeline()
 vton_engine = AIFittingPreGenerator()
 
-# 전역 크롤링 실행상태 락 플래그
-_is_crawler_running = False
+# 전역 크롤링 동시 실행 방지 락 (G2: bool 플래그의 check-then-set 경쟁 제거)
+import os
+import threading
+import uuid
+import httpx
+_crawler_lock = threading.Lock()
+
+# 수집 이미지 영구 저장 위치 (webhook 도킹 — main.py 가 /uploads 로 서빙)
+_UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+_CRAWLER_IMG_DIR = os.path.join(_UPLOADS_DIR, "crawler")
+
+
+async def _rehost_images(urls: list, max_count: int = 12) -> list:
+    """원격 이미지 URL을 backend/uploads/crawler 로 내려받아 영구 /uploads URL 로 변환.
+    (원격 이미지는 핫링크 차단/만료 가능 → 쇼핑몰이 직접 보관). 실패 시 원본 URL 유지(best-effort)."""
+    if not urls:
+        return []
+    os.makedirs(_CRAWLER_IMG_DIR, exist_ok=True)
+    out = []
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0"}) as client:
+        for u in urls[:max_count]:
+            # 이미 우리 쇼핑몰 /uploads 에 올라온 이미지는 재다운로드 불필요(연결기가 선업로드한 경우)
+            if u.startswith(settings.BACKEND_URL) and "/uploads/" in u:
+                out.append(u)
+                continue
+            try:
+                r = await client.get(u)
+                r.raise_for_status()
+                ext = ".jpg"
+                low = u.lower().split("?")[0]
+                for e in (".png", ".gif", ".webp", ".jpeg", ".jpg"):
+                    if low.endswith(e):
+                        ext = e
+                        break
+                fname = f"{uuid.uuid4().hex[:12]}{ext}"
+                with open(os.path.join(_CRAWLER_IMG_DIR, fname), "wb") as f:
+                    f.write(r.content)
+                out.append(f"{settings.BACKEND_URL}/uploads/crawler/{fname}")
+            except Exception as e:
+                logger.warning(f"[webhook] 이미지 재호스팅 실패, 원본 URL 유지: {u} ({e})")
+                out.append(u)
+    return out
+
+
+def compute_retail_price(wholesale, margin_type: str, margin_value) -> int:
+    """[윈윈 도킹] 도매가(원) + 카테고리 마진 → 소매가.
+    percent: 도매가×(1+%/100) 후 '천원 단위 올림'. fixed: 도매가 + 고정마진(원)."""
+    import math
+    try:
+        w = int(float(wholesale or 0))
+    except (ValueError, TypeError):
+        w = 0
+    if w <= 0:
+        return 0
+    mt = (margin_type or "percent").lower()
+    try:
+        mv = float(margin_value if margin_value is not None else 0)
+    except (ValueError, TypeError):
+        mv = 0.0
+    if mt == "fixed":
+        return w + int(round(mv))
+    retail = w * (1.0 + mv / 100.0)
+    return int(math.ceil(retail / 1000.0) * 1000)  # 천원 단위 올림
 
 @router.get("/vendors")
 def get_weishang_vendors(_admin: User = Depends(get_current_admin)):
@@ -127,7 +190,6 @@ async def run_gemini_mapping(raw_data: dict, db: Session) -> dict:
     categories = db.query(Category).all()
     cat_list = [{"id": c.id, "name": c.name} for c in categories]
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     system_instruction = (
         "You are an expert e-commerce product manager. "
@@ -150,53 +212,15 @@ async def run_gemini_mapping(raw_data: dict, db: Session) -> dict:
     
     prompt = f"Available Category List: {json.dumps(cat_list, ensure_ascii=False)}\nRaw Crawler Data: {json.dumps(raw_data, ensure_ascii=False)}"
     
-    request_payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"System Instruction: {system_instruction}\nUser Prompt: {prompt}"}
-                ]
-            }
-        ]
-    }
-    
-    data_bytes = json.dumps(request_payload).encode('utf-8')
-    req = urllib.request.Request(
-        url, 
-        data=data_bytes,
-        headers={'Content-Type': 'application/json'},
-        method='POST'
-    )
-    
+    import asyncio
+    loop = asyncio.get_event_loop()
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_body = response.read().decode('utf-8')
-            res_json = json.loads(res_body)
-            
-            # 파싱 결과 추출
-            candidates = res_json.get("candidates", [])
-            if not candidates:
-                raise Exception("Gemini API returned empty candidate list.")
-            
-            text_result = candidates[0]["content"]["parts"][0]["text"].strip()
-            
-            # Markdown block formatting strip
-            if text_result.startswith("```json"):
-                text_result = text_result[7:]
-            if text_result.endswith("```"):
-                text_result = text_result[:-3]
-            text_result = text_result.strip()
-            
-            parsed_data = json.loads(text_result)
-            return parsed_data
-            
-    except urllib.error.HTTPError as he:
-        err_body = he.read().decode('utf-8')
-        logger.error(f"Gemini API Http Error: {err_body}")
-        raise Exception(f"Gemini API HTTP Error {he.code}: {err_body}")
-    except Exception as e:
-        logger.error(f"Gemini Mapping Call Failed: {str(e)}")
-        raise e
+        # 동기 urllib 호출을 스레드풀에서 실행 → async 이벤트 루프 블로킹 방지 (D3/F2)
+        text_result = await loop.run_in_executor(None, generate_text, system_instruction, prompt)
+    except GeminiError as e:
+        logger.error(f"Gemini Mapping Call Failed: {e}")
+        raise
+    return json.loads(text_result)
 
 # 1. 크롤러 설정 조회 API
 @router.get("/settings")
@@ -219,7 +243,13 @@ def get_crawler_settings(db: Session = Depends(get_db), _admin: User = Depends(g
         "kakaoTargetUrl": "",
         "bandTargetUrl": ""
     })
-    return settings_data
+    # B4: 비밀번호 평문을 프론트로 반환하지 않음(마스킹). 설정 여부만 *Set 플래그로 노출.
+    safe = dict(settings_data)
+    safe["kakaoPwSet"] = bool((safe.get("kakaoPw") or "").strip())
+    safe["bandPwSet"] = bool((safe.get("bandPw") or "").strip())
+    safe["kakaoPw"] = ""
+    safe["bandPw"] = ""
+    return safe
 
 # 2. 크롤러 설정 업데이트 API
 @router.put("/settings")
@@ -229,12 +259,25 @@ def update_crawler_settings(payload: CrawlerSettingsUpdate, db: Session = Depend
     if not hq:
         raise HTTPException(status_code=404, detail="HQ 테넌트를 찾을 수 없습니다.")
     
-    theme = hq.theme_config or {}
-    theme["crawlerSettings"] = payload.dict()
-    
+    # SQLAlchemy JSON 변경 감지를 위해 새 dict 로 구성(동일 객체 변경은 감지 안 될 수 있음)
+    theme = dict(hq.theme_config or {})
+    existing = theme.get("crawlerSettings", {}) or {}
+    new_settings = payload.model_dump()
+    # B4: 비밀번호가 비어 오면 기존 저장값 유지(마스킹된 폼을 그대로 저장해 덮어쓰는 사고 방지)
+    for pw_field in ("kakaoPw", "bandPw"):
+        if not (new_settings.get(pw_field) or "").strip():
+            new_settings[pw_field] = existing.get(pw_field, "")
+    theme["crawlerSettings"] = new_settings
+
     hq.theme_config = theme
     db.commit()
-    return {"status": "success", "message": "크롤러 연동 설정이 성공적으로 저장되었습니다.", "settings": theme["crawlerSettings"]}
+    # 응답에서도 비밀번호 마스킹
+    safe = dict(new_settings)
+    safe["kakaoPwSet"] = bool((safe.get("kakaoPw") or "").strip())
+    safe["bandPwSet"] = bool((safe.get("bandPw") or "").strip())
+    safe["kakaoPw"] = ""
+    safe["bandPw"] = ""
+    return {"status": "success", "message": "크롤러 연동 설정이 성공적으로 저장되었습니다.", "settings": safe}
 
 # 3. 크롤러 데이터 AI 해석 테스트 API
 @router.post("/test-mapping")
@@ -303,71 +346,134 @@ async def crawler_webhook(
         "securityToken": "LUXAI-WINWIN-TOKEN-1234"
     })
     
-    # 토큰 검증
+    # 토큰 검증 (B3: 기본값/미설정 토큰은 fail-closed 로 거부 — 고유 토큰 강제)
     req_token = token or x_crawler_token
-    configured_token = crawler_settings.get("securityToken", "LUXAI-WINWIN-TOKEN-1234")
-    if configured_token and req_token != configured_token:
+    DEFAULT_TOKEN = "LUXAI-WINWIN-TOKEN-1234"
+    configured_token = (crawler_settings.get("securityToken") or "").strip()
+    if not configured_token or configured_token == DEFAULT_TOKEN:
+        raise HTTPException(
+            status_code=403,
+            detail="크롤러 보안 토큰이 미설정/기본값 상태입니다. 관리자 설정에서 고유한 securityToken 을 지정해야 웹훅이 활성화됩니다."
+        )
+    if req_token != configured_token:
         raise HTTPException(status_code=401, detail="보안 토큰이 일치하지 않습니다.")
     
     # 자동 등록 기능 체크
     if not crawler_settings.get("enabled", True):
         return {"status": "ignored", "message": "자동 등록 설정이 비활성화되어 있습니다."}
     
+    # 1) 원본 payload 에서 기본 필드 추출 (Gemini 실패/미설정 대비 폴백 소스)
+    raw_title = (payload.get("title") or payload.get("goodsName") or payload.get("name") or "").strip()
+    raw_desc = (payload.get("desc") or payload.get("description") or payload.get("content") or "").strip()
+    raw_images = payload.get("images") or payload.get("image_urls") or []
+    if isinstance(raw_images, str):
+        raw_images = [raw_images]
+    source_url = payload.get("original_url") or payload.get("source_url") or "winwin_crawler3"
+
+    # 최소 검증: 콘텐츠가 전혀 없으면 거부
+    if not raw_title and not raw_desc and not raw_images:
+        raise HTTPException(status_code=400, detail="수집 데이터가 비어 있습니다 (title/desc/images 중 하나는 필요).")
+
+    # 2) 중복 방지 — 같은 출처 URL + 같은 원본 제목이면 재등록하지 않음 (재시도/중복 전송 대비)
+    if raw_title:
+        existing = db.query(HQProduct).filter(
+            HQProduct.original_source_url == source_url,
+            HQProduct.cn_name == raw_title,
+        ).first()
+        if existing:
+            return {"status": "duplicate", "message": "이미 등록된 상품입니다.", "product_id": existing.id}
+
+    # 3) AI 매핑 시도 — 실패(키없음/통신오류)해도 원본 데이터로 폴백 등록 (도킹이 끊기지 않게)
     try:
         mapped = await run_gemini_mapping(payload, db)
     except Exception as e:
-        logger.error(f"Webhook Gemini Parse Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Gemini AI 해석 실패: {str(e)}")
-    
-    # 가격 산출 (반올림 백원 단위)
-    foreign_price = mapped.get("base_price_foreign", 0.0)
-    exchange_rate = float(crawler_settings.get("exchangeRate", 200.0))
-    margin_rate = float(crawler_settings.get("marginRate", 1.3))
-    calculated_price = foreign_price * exchange_rate * margin_rate
-    base_price = int(round(calculated_price, -2)) if calculated_price > 0 else 30000
-    
-    # 카테고리 이름 조회 및 사이즈 매핑
-    cat = db.query(Category).filter(Category.id == mapped.get("category_id", 1)).first()
+        logger.warning(f"[webhook] Gemini 매핑 실패 → 원본 데이터로 폴백 등록: {e}")
+        mapped = {}
+
+    # 4) 필드 확정 (매핑값 우선, 없으면 원본 폴백) — kr_name 은 절대 None 금지
+    kr_name = (mapped.get("kr_name") or raw_title or "[수집] 미상 상품").strip()[:50]
+    kr_desc = mapped.get("kr_description") or raw_desc
+    category_id = mapped.get("category_id") or payload.get("category_id")
+    # [윈윈 도킹] 윈윈이 보낸 카테고리 '이름'(가방/지갑/신발 등)으로도 매칭 (이미 분류된 상태)
+    if not category_id and payload.get("category"):
+        _cat_by_name = db.query(Category).filter(Category.name == str(payload.get("category")).strip()).first()
+        if _cat_by_name:
+            category_id = _cat_by_name.id
+    category_id = category_id or 1
+
+    # 5) 가격: [윈윈 도킹] 원화 '도매가'가 오면 카테고리별 마진으로 소매가 산출.
+    #    (윈윈은 지침공식으로 도매가를 이미 계산해 보냄 → 더블계산 방지)
+    #    도매가가 없으면(타 크롤러/구버전) 기존 외화×환율×마진으로 폴백.
+    wholesale_krw = payload.get("wholesale_price_krw") or payload.get("wholesale_price") or 0
+    try:
+        wholesale_krw = int(float(wholesale_krw))
+    except (ValueError, TypeError):
+        wholesale_krw = 0
+
+    if wholesale_krw > 0:
+        _mcat = db.query(Category).filter(Category.id == category_id).first()
+        _m_type = getattr(_mcat, "margin_type", None) or "percent"
+        _m_value = getattr(_mcat, "margin_value", None)
+        if _m_value is None:
+            _m_value = 30.0
+        base_price = compute_retail_price(wholesale_krw, _m_type, _m_value)
+    else:
+        exchange_rate = float(crawler_settings.get("exchangeRate", 200.0))
+        margin_rate = float(crawler_settings.get("marginRate", 1.3))
+        foreign_price = mapped.get("base_price_foreign") or payload.get("price") or 0
+        try:
+            foreign_price = float(foreign_price)
+        except (ValueError, TypeError):
+            foreign_price = 0.0
+        calculated_price = foreign_price * exchange_rate * margin_rate
+        base_price = int(round(calculated_price, -2)) if calculated_price > 0 else 30000
+
+    # 6) 이미지: http 원격 URL 만 추려 /uploads 로 영구 재호스팅 (없으면 placeholder)
+    src_images = mapped.get("images") or raw_images or []
+    web_images = await _rehost_images([u for u in src_images if isinstance(u, str) and u.startswith("http")])
+    if not web_images:
+        web_images = ["/placeholder.png"]
+
+    # 7) 카테고리 검증 (없는 id 면 첫 카테고리로 폴백) + 사이즈 파싱
+    cat = db.query(Category).filter(Category.id == category_id).first()
+    if not cat:
+        cat = db.query(Category).first()
+        category_id = cat.id if cat else 1
     cat_name = cat.name if cat else ""
-    
-    title_text = payload.get("title") or payload.get("goodsName") or mapped.get("kr_name") or ""
-    desc_text = mapped.get("kr_description") or ""
-    parsed_sizes = extract_sizes_from_text(f"{title_text} {desc_text}", cat_name)
-    
-    # 상품 DB 등록
+    parsed_sizes = extract_sizes_from_text(f"{kr_name} {kr_desc}", cat_name)
+
+    # 8) 상품 등록
     new_prod = HQProduct(
-        category_id=mapped.get("category_id", 1),
-        original_source_url=payload.get("original_url") or payload.get("source_url") or "winwin_crawler3",
-        cn_name=title_text,
-        kr_name=mapped.get("kr_name"),
-        kr_description=desc_text,
+        category_id=category_id,
+        original_source_url=source_url,
+        cn_name=raw_title or kr_name,
+        kr_name=kr_name,
+        kr_description=kr_desc,
         base_price=base_price,
-        images=mapped.get("images") or ["/placeholder.png"],
+        wholesale_price=wholesale_krw,  # [윈윈 도킹] 도매원가 보관 (마진 변경 시 재계산용)
+        images=web_images,
         video_url=mapped.get("video_url"),
-        status="APPROVED"
+        status="APPROVED",
     )
-    
     if parsed_sizes:
         new_prod.size_stock_config = parsed_sizes
         new_prod.stock_quantity = sum(parsed_sizes.values())
     else:
         new_prod.stock_quantity = 0
         new_prod.size_stock_config = None
-        
+
     db.add(new_prod)
     db.commit()
     db.refresh(new_prod)
-    
-    # 백그라운드 AI 누끼 선 생성 예약 (수집 시 자동 가공은 API 비용 과다 소모로 제외, 관리자 페이지에서 수동 1컷 가공으로 대체)
-    # from backend.routers.admin import pre_generate_transparent_clothing_task
-    # bg_tasks.add_task(pre_generate_transparent_clothing_task, new_prod.id)
-    
+
     return {
         "status": "success",
-        "message": f"크롤러 데이터가 AI 자동 정제 및 {len(parsed_sizes)}개 사이즈 자동 수량 매핑 후 등록되었습니다: {new_prod.kr_name}",
+        "message": f"수집 데이터 등록 완료: {new_prod.kr_name} (도매 {wholesale_krw:,}원 → 소매 {base_price:,}원, 사이즈 {len(parsed_sizes)}종, 이미지 {len(web_images)}장)",
         "product_id": new_prod.id,
+        "wholesale_price": wholesale_krw,
         "price": base_price,
-        "parsed_sizes": parsed_sizes
+        "parsed_sizes": parsed_sizes,
+        "ai_mapped": bool(mapped),
     }
 
 # ====================================================
@@ -585,9 +691,14 @@ def wechat_qr_login(payload: WeChatQRLoginRequest, _admin: User = Depends(get_cu
     """
     위챗 QR 로그인을 위한 브라우저를 띄우고 로그인이 끝날 때까지 대기하여 세션 정보를 저장합니다.
     """
+    # G2: 서버에서 GUI 브라우저를 띄우는 동작은 배포 환경에서 위험/불가 → 기본 비활성(명시적 옵트인 필요)
+    if os.getenv("ENABLE_WECHAT_QR_LOGIN") != "1":
+        raise HTTPException(
+            status_code=400,
+            detail="서버 측 위챗 QR 로그인(GUI 브라우저 구동)은 비활성화되어 있습니다. 운영자가 ENABLE_WECHAT_QR_LOGIN=1 로 옵트인해야 합니다."
+        )
     from playwright.sync_api import sync_playwright
-    import os
-    
+
     auth_state_path = "auth_state.json"
     LOGIN_URL = "https://www.szwego.com/static/index.html?link_type=pc_login#/pc_login"
     
@@ -634,7 +745,6 @@ def run_async_scraping_job(
     margin_rate: float,
     category_id: int
 ):
-    global _is_crawler_running
     db = SessionLocal()
     try:
         logger.info(f"Background WeChat scraping job started for URL: {vendor_url}")
@@ -668,7 +778,7 @@ def run_async_scraping_job(
     except Exception as err:
         logger.error(f"Background WeChat scraping job failed: {err}", exc_info=True)
     finally:
-        _is_crawler_running = False
+        _crawler_lock.release()
         db.close()
 
 @router.post("/scrape-platform")
@@ -677,19 +787,16 @@ async def scrape_platform(payload: PlatformScrapeRequest, bg_tasks: BackgroundTa
     윈윈크롤러3 어댑터를 호출하여 웨이상에서 상품을 긁어와 DB에 PENDING 상태로 등록합니다.
     비동기 백그라운드로 처리하여 웹 연결 타임아웃을 방지하며, 동시 실행 락을 탑재합니다.
     """
-    global _is_crawler_running
-    
     if payload.platform != "weishang":
         raise HTTPException(status_code=400, detail="현재는 'weishang'(웨이상) 플랫폼 크롤러 연동만 지원됩니다.")
-        
-    if _is_crawler_running:
+
+    # G2: Lock 으로 원자적 동시실행 방지 (acquire 실패 = 이미 실행 중). 작업 종료 시 백그라운드에서 release.
+    if not _crawler_lock.acquire(blocking=False):
         raise HTTPException(
-            status_code=400, 
+            status_code=409,
             detail="현재 다른 도매 업체의 수집 봇이 이미 파견 중입니다. 잠시 후 다시 시도해 주세요."
         )
-        
-    _is_crawler_running = True
-    
+
     # 백그라운드로 작업 이관 (Timeout 방지)
     bg_tasks.add_task(
         run_async_scraping_job,

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from backend.database import Base
@@ -42,6 +42,9 @@ class Category(Base):
     parent_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
     name = Column(String, nullable=False, index=True) # 남성의류, 여성의류, etc.
     slug = Column(String, unique=True, index=True)
+    # [윈윈 도킹] 카테고리별 소매 마진 (도매가 → 소매가 변환). margin_type: 'percent' | 'fixed'
+    margin_type = Column(String, default="percent")
+    margin_value = Column(Float, default=30.0)  # percent면 %, fixed면 원(￦)
 
     parent = relationship("Category", remote_side=[id], backref="children")
     products = relationship("HQProduct", back_populates="category")
@@ -62,6 +65,7 @@ class HQProduct(Base):
     description_html = Column(Text, nullable=True) # Full HTML Source from Rich Editor
     
     base_price = Column(Integer, nullable=False, default=0)
+    wholesale_price = Column(Integer, nullable=True, default=0)  # [윈윈 도킹] 윈윈크롤러 도매원가(원)
     sale_price = Column(Integer, nullable=True)
     discount_rate = Column(Integer, nullable=True)
     
@@ -121,8 +125,11 @@ class Order(Base):
     shipping_address = Column(String, nullable=True)
     shipping_address_detail = Column(String, nullable=True)
     is_reward_processed = Column(Boolean, default=False)
+    # 결제 시 적용된 할인 내역 (영수증/환불 추적용)
+    discount_amount = Column(Integer, default=0)  # 쿠폰 할인액
+    used_points = Column(Integer, default=0)      # 사용한 적립금(원)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     items = relationship("OrderItem", back_populates="order")
 
 class AddressBook(Base):

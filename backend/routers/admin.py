@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from backend.database import get_db
 from backend.models import HQProduct, Category, User, Tenant, SupportTicket
 from backend.config import settings
+from backend.utils.gemini import generate_text, GeminiError
 
 router = APIRouter()
 
@@ -22,9 +23,10 @@ class CategoryResponse(BaseModel):
     name: str
     slug: str
     parent_id: Optional[int]
-    
-    class Config:
-        orm_mode = True
+    margin_type: Optional[str] = "percent"   # [윈윈 도킹] 'percent' | 'fixed'
+    margin_value: Optional[float] = 30.0      # percent면 %, fixed면 원
+
+    model_config = {"from_attributes": True}
 
 import logging
 logger = logging.getLogger(__name__)
@@ -135,6 +137,44 @@ def delete_category(cat_id: int, db: Session = Depends(get_db)):
     db.delete(cat)
     db.commit()
     return {"status": "success", "message": "Category deleted"}
+
+
+# ==========================================
+# [윈윈 도킹] 카테고리별 소매 마진 설정
+# ==========================================
+
+class CategoryMarginUpdate(BaseModel):
+    margin_type: str       # 'percent' | 'fixed'
+    margin_value: float    # percent면 %, fixed면 원(￦)
+
+@router.put("/category/{cat_id}/margin")
+def update_category_margin(cat_id: int, payload: CategoryMarginUpdate, recompute: bool = False, db: Session = Depends(get_db)):
+    """카테고리별 소매 마진(%/고정) 저장. recompute=true면 이 카테고리 기존 상품의 소매가도 재계산.
+    (윈윈 도매가 × 마진 = 소매가. percent는 천원 단위 올림.)"""
+    cat = db.query(Category).filter(Category.id == cat_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    mt = (payload.margin_type or "percent").lower()
+    if mt not in ("percent", "fixed"):
+        mt = "percent"
+    cat.margin_type = mt
+    cat.margin_value = float(payload.margin_value or 0)
+
+    updated = 0
+    if recompute:
+        from backend.routers.crawler import compute_retail_price
+        prods = db.query(HQProduct).filter(HQProduct.category_id == cat_id).all()
+        for p in prods:
+            if p.wholesale_price and p.wholesale_price > 0:
+                p.base_price = compute_retail_price(p.wholesale_price, cat.margin_type, cat.margin_value)
+                updated += 1
+    db.commit()
+    return {
+        "status": "success", "category_id": cat_id,
+        "margin_type": cat.margin_type, "margin_value": cat.margin_value,
+        "recomputed_products": updated,
+    }
+
 
 # ==========================================
 # Product Management (상품 관리 CRUD)
@@ -301,7 +341,7 @@ def update_product(product_id: int, payload: ProductUpdate, bg_tasks: Background
         raise HTTPException(status_code=404, detail="Product not found")
     
     # None이 아닌 필드만 업데이트
-    update_data = payload.dict(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True)
     images_changed = "images" in update_data
     for field, value in update_data.items():
         if value is not None:
@@ -598,7 +638,7 @@ def update_tenant(tenant_id: int, payload: TenantUpdate, db: Session = Depends(g
     if not tenant:
         raise HTTPException(status_code=404, detail="테넌트를 찾을 수 없습니다.")
         
-    update_data = payload.dict(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True)
     
     # 도메인 변경 시 중복 검사
     if "domain" in update_data and update_data["domain"] != tenant.domain:
@@ -680,38 +720,8 @@ def get_tenant_stats(tenant_id: int, db: Session = Depends(get_db)):
             .filter(TenantProduct.tenant_id == tenant_id, Order.shipping_status == "DELIVERED")\
             .scalar() or 0
 
-        # 실시간 데이터가 0이면, 신규 임대 업자 시연용 고품질 데모 데이터를 생성하여 반환 (UI/UX Wow Factor 극대화)
-        if real_sales == 0:
-            import random
-            random.seed(tenant_id + 2026) # 테넌트별로 일관되게 고정된 값 연출
-            
-            sales_demo = random.randint(12500000, 39000000)
-            orders_demo = random.randint(90, 240)
-            
-            # 최근 6개월 매출 추이
-            months = ["12월", "1월", "2월", "3월", "4월", "5월"]
-            monthly_sales = []
-            base_sale = sales_demo // 6
-            for m in months:
-                variation = random.randint(-1200000, 2200000)
-                monthly_sales.append({"month": m, "amount": max(800000, base_sale + variation)})
-                
-            pending_demo = random.randint(2, 8)
-            shipping_demo = random.randint(4, 15)
-            delivered_demo = orders_demo - pending_demo - shipping_demo
-            
-            return {
-                "total_sales": sales_demo,
-                "total_orders": orders_demo,
-                "shipping_stats": {
-                    "preparing": pending_demo,
-                    "shipping": shipping_demo,
-                    "delivered": delivered_demo
-                },
-                "monthly_sales": monthly_sales,
-                "is_demo": True
-            }
-            
+        # H1: 매출 0 시 랜덤 가짜데이터를 반환하던 로직 제거 → 항상 실제 집계값 사용
+
         # 실시간 데이터가 존재하는 경우
         months = ["12월", "1월", "2월", "3월", "4월", "5월"]
         monthly_sales = []
@@ -817,7 +827,6 @@ def generate_ai_banner(payload: AIBannerRequest):
         )
 
     # Gemini REST API 호출 준비
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     # 구조화된 JSON 출력을 위한 System Instruction 및 Prompt 작성
     system_instruction = (
@@ -835,64 +844,17 @@ def generate_ai_banner(payload: AIBannerRequest):
         "Return ONLY the raw JSON object. Do not include markdown code block syntax (like ```json ... ```)."
     )
     
-    request_payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"System Instruction: {system_instruction}\nUser Prompt: {payload.prompt}"}
-                ]
-            }
-        ]
-    }
-    
     try:
-        data_bytes = json.dumps(request_payload).encode('utf-8')
-        req = urllib.request.Request(
-            url, 
-            data=data_bytes,
-            headers={'Content-Type': 'application/json'},
-            method='POST'
-        )
-        
-        with urllib.request.urlopen(req, timeout=15) as response:
-            resp_bytes = response.read()
-            resp_data = json.loads(resp_bytes.decode('utf-8'))
-            
-            candidates = resp_data.get("candidates", [])
-            if not candidates:
-                raise HTTPException(status_code=500, detail="Gemini API로부터 적절한 답변 후보를 받지 못했습니다.")
-            
-            text_response = candidates[0]["content"]["parts"][0]["text"].strip()
-            
-            # 마크다운 백틱 제거
-            if text_response.startswith("```"):
-                lines = text_response.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                text_response = "\n".join(lines).strip()
-            
-            parsed_json = json.loads(text_response)
-            
-            # 무결성 체크
-            required_keys = ["bannerTitle", "bannerSubtitle", "primaryColor", "secondaryColor", "fontFamily", "layoutStyle"]
-            for key in required_keys:
-                if key not in parsed_json:
-                    parsed_json[key] = ""
-                    
-            return parsed_json
-            
-    except urllib.error.HTTPError as e:
-        error_msg = e.read().decode('utf-8')
-        raise HTTPException(status_code=502, detail=f"Gemini API 호출 에러: {error_msg}")
+        text_response = generate_text(system_instruction, payload.prompt, timeout=15)
+        parsed_json = json.loads(text_response)
+        # 누락 키 채움 (무결성)
+        for _k in ["bannerTitle", "bannerSubtitle", "primaryColor", "secondaryColor", "fontFamily", "layoutStyle"]:
+            parsed_json.setdefault(_k, "")
+        return parsed_json
+    except GeminiError as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API 호출 에러: {e}")
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Gemini 응답을 JSON으로 파싱하는 데 실패했습니다. 응답 원문: {text_response}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 배너 생성 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="Gemini 응답을 JSON 으로 파싱하지 못했습니다.")
 
 
 class ProductInlineUpdate(BaseModel):
@@ -907,7 +869,7 @@ def inline_update_product(product_id: int, payload: ProductInlineUpdate, db: Ses
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
         
-    update_data = payload.dict(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         if value is not None:
             setattr(product, field, value)
@@ -952,7 +914,6 @@ def ai_autofill_product(payload: ProductAIAutofillRequest, db: Session = Depends
     cat_list_str = "\n".join([f"- ID: {c.id}, Name: {c.name}, Slug: {c.slug}" for c in categories])
 
     # 2. Gemini REST API 호출 준비
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     # 구조화된 JSON 출력을 위한 System Instruction 및 Prompt 작성
     system_instruction = (
@@ -978,76 +939,33 @@ def ai_autofill_product(payload: ProductAIAutofillRequest, db: Session = Depends
         f"- Extra Hint/Detail: {payload.hint or 'N/A'}"
     )
     
-    request_payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"System Instruction: {system_instruction}\nUser Prompt: {prompt}"}
-                ]
-            }
-        ]
-    }
-    
     try:
-        data_bytes = json.dumps(request_payload).encode('utf-8')
-        req = urllib.request.Request(
-            url, 
-            data=data_bytes,
-            headers={'Content-Type': 'application/json'},
-            method='POST'
-        )
-        
-        with urllib.request.urlopen(req, timeout=20) as response:
-            resp_bytes = response.read()
-            resp_data = json.loads(resp_bytes.decode('utf-8'))
-            
-            candidates = resp_data.get("candidates", [])
-            if not candidates:
-                raise HTTPException(status_code=500, detail="Gemini API로부터 적절한 답변 후보를 받지 못했습니다.")
-            
-            text_response = candidates[0]["content"]["parts"][0]["text"].strip()
-            
-            # 마크다운 백틱 제거
-            if text_response.startswith("```"):
-                lines = text_response.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                text_response = "\n".join(lines).strip()
-            
-            parsed_json = json.loads(text_response)
-            
-            # 무결성 및 타입 체크
-            if "kr_name" not in parsed_json:
-                parsed_json["kr_name"] = payload.kr_name or ""
-            if "kr_description" not in parsed_json:
-                parsed_json["kr_description"] = ""
-            if "category_id" not in parsed_json:
-                parsed_json["category_id"] = payload.category_id or (categories[0].id if categories else 1)
-            else:
-                try:
-                    parsed_json["category_id"] = int(parsed_json["category_id"])
-                except:
-                    parsed_json["category_id"] = payload.category_id or 1
-            if "recommended_price" not in parsed_json:
+        text_response = generate_text(system_instruction, prompt, timeout=20)
+        parsed_json = json.loads(text_response)
+
+        # 무결성 및 타입 체크
+        if "kr_name" not in parsed_json:
+            parsed_json["kr_name"] = payload.kr_name or ""
+        if "kr_description" not in parsed_json:
+            parsed_json["kr_description"] = ""
+        if "category_id" not in parsed_json:
+            parsed_json["category_id"] = payload.category_id or (categories[0].id if categories else 1)
+        else:
+            try:
+                parsed_json["category_id"] = int(parsed_json["category_id"])
+            except (ValueError, TypeError):
+                parsed_json["category_id"] = payload.category_id or 1
+        if "recommended_price" not in parsed_json:
+            parsed_json["recommended_price"] = 39000
+        else:
+            try:
+                parsed_json["recommended_price"] = int(parsed_json["recommended_price"])
+            except (ValueError, TypeError):
                 parsed_json["recommended_price"] = 39000
-            else:
-                try:
-                    parsed_json["recommended_price"] = int(parsed_json["recommended_price"])
-                except:
-                    parsed_json["recommended_price"] = 39000
-                    
-            return parsed_json
-            
-    except urllib.error.HTTPError as e:
-        error_msg = e.read().decode('utf-8')
-        raise HTTPException(status_code=502, detail=f"Gemini API 호출 에러: {error_msg}")
+
+        return parsed_json
+    except GeminiError as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API 호출 에러: {e}")
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Gemini 응답을 JSON으로 파싱하는 데 실패했습니다. 응답 원문: {text_response}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 자동 채우기 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="Gemini 응답을 JSON 으로 파싱하지 못했습니다.")
 
