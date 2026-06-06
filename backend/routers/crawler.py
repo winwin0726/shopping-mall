@@ -35,7 +35,7 @@ _UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 _CRAWLER_IMG_DIR = os.path.join(_UPLOADS_DIR, "crawler")
 
 
-async def _rehost_images(urls: list, max_count: int = 12) -> list:
+async def _rehost_images(urls: list, max_count: int = 30) -> list:
     """원격 이미지 URL을 backend/uploads/crawler 로 내려받아 영구 /uploads URL 로 변환.
     (원격 이미지는 핫링크 차단/만료 가능 → 쇼핑몰이 직접 보관). 실패 시 원본 URL 유지(best-effort)."""
     if not urls:

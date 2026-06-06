@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
@@ -9,7 +9,6 @@ import {
   ImagePlus, Star, GripVertical, Link2, Camera, Cpu, Settings, Copy, Play
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
 interface Product {
   id: number;
@@ -155,12 +154,14 @@ function SmartImageUploader({
 
   // 이미지 드래그앤드롭 순서 변경용 상태
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  // 확대보기(라이트박스) 상태
+  const [enlargedUrl, setEnlargedUrl] = useState<string | null>(null);
 
   const uploadFiles = async (files: FileList | File[]) => {
     const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
-    if (images.length + imageFiles.length > 10) {
-      alert("최대 10장까지 업로드 가능합니다.");
+    if (images.length + imageFiles.length > 30) {
+      alert("최대 30장까지 업로드 가능합니다.");
       return;
     }
 
@@ -230,8 +231,8 @@ function SmartImageUploader({
       alert("올바른 URL을 입력하세요 (http:// 또는 https://)");
       return;
     }
-    if (images.length >= 10) {
-      alert("최대 10장까지 등록 가능합니다.");
+    if (images.length >= 30) {
+      alert("최대 30장까지 등록 가능합니다.");
       return;
     }
     const updated = [...images, url];
@@ -265,7 +266,7 @@ function SmartImageUploader({
       <div className="flex items-center justify-between">
         <label className="block text-sm font-semibold text-slate-300">
           <Camera size={14} className="inline mr-1.5 -mt-0.5" />
-          상품 이미지 <span className="text-slate-500 font-normal">({images.length}/10)</span>
+          상품 이미지 <span className="text-slate-500 font-normal">({images.length}/30)</span>
           <span className="text-[10px] text-blue-400 block mt-0.5 font-normal">* 이미지를 드래그하여 노출 순서를 변경할 수 있습니다.</span>
         </label>
         <button
@@ -339,7 +340,7 @@ function SmartImageUploader({
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-slate-400">이미지를 드래그하거나 클릭하여 업로드</p>
-              <p className="text-xs text-slate-600 mt-1">JPG, PNG, WebP · 최대 10장</p>
+              <p className="text-xs text-slate-600 mt-1">JPG, PNG, WebP · 최대 30장</p>
             </div>
           </div>
         ) : (
@@ -378,8 +379,21 @@ function SmartImageUploader({
                   </div>
                 )}
 
+                {/* 순서 번호 */}
+                <div className="absolute bottom-1 left-1 bg-black/60 text-white rounded px-1.5 py-0.5 text-[9px] font-bold z-10 pointer-events-none">
+                  {i + 1}
+                </div>
+
                 {/* 호버 컨트롤 */}
                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setEnlargedUrl(url)}
+                    className="p-1.5 bg-slate-200 hover:bg-white text-slate-900 rounded transition transform hover:scale-110 active:scale-95"
+                    title="확대보기"
+                  >
+                    <Eye size={11} />
+                  </button>
                   {url !== mainImageUrl && (
                     <button
                       type="button"
@@ -403,7 +417,7 @@ function SmartImageUploader({
             ))}
 
             {/* 추가 버튼 */}
-            {images.length < 10 && (
+            {images.length < 30 && (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -416,6 +430,29 @@ function SmartImageUploader({
           </div>
         )}
       </div>
+
+      {/* 확대보기 라이트박스 */}
+      {enlargedUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-6 cursor-zoom-out animate-in fade-in duration-150"
+          onClick={() => setEnlargedUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setEnlargedUrl(null)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition"
+            title="닫기"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={enlargedUrl}
+            alt="확대 이미지"
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

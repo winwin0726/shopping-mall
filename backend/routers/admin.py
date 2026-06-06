@@ -370,10 +370,29 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Product not found")
     
     product_name = product.kr_name
+
+    # 상품에 연결된 업로드 이미지 파일 정리 (고아 파일 누적 방지)
+    # /uploads/ 내부 파일만, 경로 이탈(traversal) 방지 가드 포함
+    removed_files = 0
+    try:
+        import os
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+        uploads_real = os.path.realpath(uploads_dir)
+        for u in (product.images or []):
+            if not isinstance(u, str) or "/uploads/" not in u:
+                continue  # 외부(원격) URL 이나 placeholder 는 건너뜀
+            rel = u.split("/uploads/", 1)[1].split("?")[0]
+            fp = os.path.realpath(os.path.join(uploads_dir, rel))
+            if fp.startswith(uploads_real + os.sep) and os.path.isfile(fp):
+                os.remove(fp)
+                removed_files += 1
+    except Exception as e:
+        logger.warning(f"[delete_product] 이미지 파일 정리 실패(무시): {e}")
+
     db.delete(product)
     db.commit()
-    
-    return {"status": "success", "message": f"상품 '{product_name}' 삭제 완료"}
+
+    return {"status": "success", "message": f"상품 '{product_name}' 삭제 완료 (이미지 {removed_files}개 정리)"}
 
 class ExtractTransparentRequest(BaseModel):
     image_url: str
