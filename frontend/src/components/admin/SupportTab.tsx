@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import { 
@@ -20,7 +20,7 @@ interface TicketData {
 }
 
 export default function SupportTab() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+  const apiUrl = API_URL;
   const [tickets, setTickets] = useState<TicketData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

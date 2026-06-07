@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { Edit3, Star, Trash2, Loader2, PackageOpen } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,7 +17,7 @@ interface ReviewItem {
 }
 
 export default function MyReviewsPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
+import { API_URL } from "@/lib/api";
 import { MoveRight, Package, TrendingUp, Sparkles, Camera, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -17,7 +18,7 @@ const GRADE_LABELS: Record<number, string> = {
 };
 
 export default function MyPageOverview() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+  const apiUrl = API_URL;
   const { user } = useAuth();
   const [ordersCount, setOrdersCount] = useState(0);
   const { themeConfig, tenantName } = useTheme();

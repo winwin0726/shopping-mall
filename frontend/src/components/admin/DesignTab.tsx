@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import { 
@@ -159,7 +159,7 @@ const PRESETS = [
 ];
 
 export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: any) => void }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+  const apiUrl = API_URL;
   
   const [tenant, setTenant] = useState<TenantData | null>(null);
   const [loading, setLoading] = useState(true);

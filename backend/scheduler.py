@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -81,14 +82,20 @@ def automated_daily_crawling_job():
 scheduler = BackgroundScheduler()
 
 def start_scheduler():
-    scheduler.add_job(
-        automated_daily_crawling_job,
-        trigger=CronTrigger(hour=2, minute=0),
-        id="daily_crawler_job",
-        replace_existing=True
-    )
+    # C3: 기본 비활성. 과거엔 example-weishang-album.com 더미 URL 대상으로 매일 02:00 무조건 실패했음.
+    #     실제 소싱 대상이 준비된 경우에만 ENABLE_DAILY_CRAWLER=1 로 활성화한다.
+    if os.getenv("ENABLE_DAILY_CRAWLER") == "1":
+        scheduler.add_job(
+            automated_daily_crawling_job,
+            trigger=CronTrigger(hour=2, minute=0),
+            id="daily_crawler_job",
+            replace_existing=True
+        )
+        logger.info("⏰ 일일 자동 크롤 잡 등록됨 (ENABLE_DAILY_CRAWLER=1).")
+    else:
+        logger.info("⏰ 일일 자동 크롤 잡 비활성(기본). 활성화하려면 ENABLE_DAILY_CRAWLER=1 + 실제 소스 설정.")
     scheduler.start()
-    logger.info("⏰ Background APScheduler가 성공적으로 가동되었습니다.")
+    logger.info("⏰ Background APScheduler 가동 완료.")
 
 def stop_scheduler():
     scheduler.shutdown()

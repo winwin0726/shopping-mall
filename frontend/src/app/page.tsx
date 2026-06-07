@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_URL } from "@/lib/api";
 import { OutfitState } from "@/components/FittingRoom";
 import { Product } from "@/components/ProductList";
 import PremiumVtonModal from "@/components/PremiumVtonModal";
@@ -22,7 +23,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+        const apiUrl = API_URL;
         const response = await fetch(`${apiUrl}/api/products`);
         if (response.ok) {
           const data = await response.json();

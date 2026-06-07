@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import {
   MessageSquare,
   Plus,
@@ -24,7 +25,7 @@ interface Ticket {
 }
 
 export default function SupportPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);

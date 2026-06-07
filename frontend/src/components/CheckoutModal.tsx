@@ -5,6 +5,7 @@ import { X, CreditCard, Wallet, Landmark, CheckCircle, Loader2, MapPin } from "l
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
+import { API_URL, authFetch } from "@/lib/api";
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -23,45 +24,63 @@ export default function CheckoutModal({ isOpen, onClose, product, quantity, cart
   const [isSuccess, setIsSuccess] = useState(false);
   const [orderNumberState, setOrderNumberState] = useState("");
   const [address, setAddress] = useState<any>(null);
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
+  const [pointsInput, setPointsInput] = useState<number>(0);
 
   useEffect(() => {
     if (isOpen && user) {
-      const token = localStorage.getItem("token");
-      if (token) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        fetch(`${apiUrl}/api/address/me/default`, { headers: { Authorization: `Bearer ${token}` } })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => { if (data) setAddress(data); })
-          .catch(() => {});
-      }
+      // 기본 배송지
+      authFetch(`${API_URL}/api/address/me/default`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => { if (data) setAddress(data); })
+        .catch(() => {});
+      // 사용 가능한 쿠폰 목록
+      authFetch(`${API_URL}/api/auth/me/coupons`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setCoupons(Array.isArray(data) ? data : []))
+        .catch(() => setCoupons([]));
+    }
+    if (!isOpen) {
+      // 모달이 닫히면 선택 초기화
+      setSelectedCouponId(null);
+      setPointsInput(0);
     }
   }, [isOpen, user]);
 
   if (!isOpen) return null;
+
+  // 할인 계산 (서버가 최종 재검증하지만 UI 표시·전송용으로 동일 규칙 적용)
+  const selectedCoupon = coupons.find((c) => c.id === selectedCouponId) || null;
+  const couponDiscount = selectedCoupon ? Math.min(selectedCoupon.discount_amount, totalAmount) : 0;
+  const remainingAfterCoupon = totalAmount - couponDiscount;
+  const maxUsablePoints = Math.max(0, Math.min(user?.reward_points || 0, remainingAfterCoupon));
+  const pointsToUse = Math.max(0, Math.min(Math.floor(pointsInput || 0), maxUsablePoints));
+  const finalAmount = Math.max(0, remainingAfterCoupon - pointsToUse);
 
   const handleCheckout = async () => {
     setIsProcessing(true);
     await new Promise(r => setTimeout(r, 2000));
     const orderNumber = `AV-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
     setOrderNumberState(orderNumber);
-    const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     try {
-      let apiEndpoint = `${apiUrl}/api/orders/orders`;
+      let apiEndpoint = `${API_URL}/api/orders/orders`;
       let payload: any = {
         customer_name: address ? address.recipient_name : (user ? user.name : "Guest"),
         customer_phone: address ? address.phone : "010-0000-0000",
-        total_amount: totalAmount,
+        total_amount: finalAmount,
         payment_method: method.toUpperCase(),
         payment_id: "tx_" + Date.now(),
         shipping_postal_code: address?.postal_code || null,
         shipping_address: address?.address_line1 || null,
         shipping_address_detail: address?.address_line2 || null,
+        coupon_id: selectedCouponId,
+        used_points: pointsToUse,
       };
 
       if (cartItems && cartItems.length > 0) {
-        apiEndpoint = `${apiUrl}/api/orders/checkout/cart`;
+        apiEndpoint = `${API_URL}/api/orders/checkout/cart`;
         payload.cart_item_ids = cartItems.map((item: any) => item.id);
       } else if (product) {
         payload.user_id = user ? (user as any).id : null;
@@ -70,9 +89,9 @@ export default function CheckoutModal({ isOpen, onClose, product, quantity, cart
         payload.items = [{ product_id: product.id, quantity: quantity || 1, unit_price: product.sale_price || product.base_price }];
       }
 
-      const res = await fetch(apiEndpoint, {
+      const res = await authFetch(apiEndpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -136,11 +155,67 @@ export default function CheckoutModal({ isOpen, onClose, product, quantity, cart
                     </button>
                   ))}
                 </div>
+
+                {/* 할인 적용 (쿠폰 / 적립금) — 로그인 사용자 전용 */}
+                {user && (
+                  <>
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">할인 적용</h3>
+                    <div className="space-y-3 mb-2">
+                      {/* 쿠폰 선택 */}
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-sm font-semibold text-slate-600 dark:text-slate-300 shrink-0">쿠폰</label>
+                        <select
+                          value={selectedCouponId ?? ""}
+                          onChange={(e) => setSelectedCouponId(e.target.value ? Number(e.target.value) : null)}
+                          className="flex-1 max-w-[62%] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100"
+                        >
+                          <option value="">{coupons.length ? "쿠폰 선택 안함" : "보유 쿠폰 없음"}</option>
+                          {coupons.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} (₩{Number(c.discount_amount).toLocaleString()})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* 적립금 사용 */}
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-sm font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                          적립금 <span className="text-xs text-slate-400">(보유 {(user.reward_points || 0).toLocaleString()}P)</span>
+                        </label>
+                        <div className="flex items-center gap-2 flex-1 max-w-[62%]">
+                          <input
+                            type="number"
+                            min={0}
+                            max={maxUsablePoints}
+                            value={pointsInput || ""}
+                            onChange={(e) => setPointsInput(Number(e.target.value) || 0)}
+                            placeholder="0"
+                            className="flex-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-right text-slate-800 dark:text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPointsInput(maxUsablePoints)}
+                            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-200 shrink-0 hover:bg-slate-200 transition"
+                          >
+                            최대
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="text-center sm:text-left">
+                  {(couponDiscount > 0 || pointsToUse > 0) && (
+                    <div className="text-xs text-slate-400 mb-1 space-y-0.5">
+                      <p>상품 금액 <span className="font-semibold text-slate-500 dark:text-slate-300">₩{totalAmount.toLocaleString()}</span></p>
+                      {couponDiscount > 0 && <p>쿠폰 할인 <span className="font-semibold text-rose-500">-₩{couponDiscount.toLocaleString()}</span></p>}
+                      {pointsToUse > 0 && <p>적립금 사용 <span className="font-semibold text-rose-500">-₩{pointsToUse.toLocaleString()}</span></p>}
+                    </div>
+                  )}
                   <p className="text-slate-500 text-sm font-semibold">최종 결제 금액</p>
-                  <p className="text-3xl font-black text-slate-900 dark:text-white">₩{totalAmount.toLocaleString()}</p>
+                  <p className="text-3xl font-black text-slate-900 dark:text-white">₩{finalAmount.toLocaleString()}</p>
                 </div>
                 <button onClick={handleCheckout} disabled={isProcessing} className="w-full sm:w-auto px-10 py-4 bg-slate-900 dark:bg-blue-600 text-white font-extrabold rounded-2xl flex items-center justify-center transition-all hover:bg-black shadow-xl disabled:opacity-70">
                   {isProcessing ? <><Loader2 className="animate-spin mr-2" size={20} /> 진행중...</> : "결제 완료하기"}

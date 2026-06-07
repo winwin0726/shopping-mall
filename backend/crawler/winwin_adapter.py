@@ -82,10 +82,36 @@ def scrape_weishang_album_sync(
     
     scraped_products = []
     
+    temp_items = []
+    
     # 크롤러 결과 수집용 핸들러
     def on_result_received(item: dict):
+        # 발견 시 바로 DB에 넣지 않고 임시 메모리 리스트에 수집된 정보를 순서대로 누적합니다.
+        temp_items.append(item)
+        logger.info(f"Buffered winwin crawled product for reverse importing: {item.get('title')}")
+
+    # 윈윈크롤러3 앨범 스크레퍼 스레드 인스턴스화
+    crawler_thread = WeishangCrawlingThread(
+        vendor_url=vendor_url,
+        vendor_name=os.path.basename(vendor_url)[:20],
+        target_count=target_count,
+        dest_dir=dest_dir,
+        headless_mode=True,
+        trans_options=trans_options
+    )
+    
+    # 결과 수신 시그널 연결 (더미 시그널 호출)
+    crawler_thread.result_signal.connect(on_result_received)
+    
+    # 크롤러 실행 (QThread의 run() 메서드를 직접 동기식 호출)
+    logger.info("Starting WeishangCrawlingThread run loop...")
+    crawler_thread.run()
+    logger.info("WeishangCrawlingThread run loop complete.")
+    
+    # [수집 순서 보정] 위챗/웨이상 앨범은 최신 수집물이 리스트 전면에 오므로,
+    # 수집 완료 후 과거 상품부터 역순(reversed)으로 DB에 저장해야 최신 등록 상품이 쇼핑몰 최상단에 뜨게 됩니다.
+    for item in reversed(temp_items):
         try:
-            # 윈윈크롤러3가 이미지 로컬 다운로드 및 AI 번역을 완료하면 이 콜백이 호출됨
             title = item.get("title") or "미상 수집 상품"
             raw_desc = item.get("raw_description") or ""
             local_image_dir = item.get("local_image_dir") or ""
@@ -100,20 +126,22 @@ def scrape_weishang_album_sync(
             parsed_sizes = extract_sizes_from_text(f"{title} {raw_desc}", category_name)
             
             # DB용 이미지 URL 목록 생성 (백엔드 static 경로에 맞춰 매핑)
-            # 여기서는 로컬 다운로드된 이미지 상대 경로를 쓰거나 placeholder 설정
             web_images = []
             for img_file in image_files:
-                # 실제로 윈도우 static 경로로 서빙하기 위한 파일 이동 처리가 정석이나,
-                # 기본 수집 증명용으로 상대 URL 바인딩
                 img_path = f"/static/crawler/{os.path.basename(local_image_dir)}/{img_file}"
                 web_images.append(img_path)
             
             if not web_images:
                 web_images = ["/placeholder.png"]
                 
+            # 브랜드 판별
+            from backend.utils.brand_detector import detect_brand_id
+            detected_brand_id = detect_brand_id(db, title, raw_desc)
+            
             # 상품 DB 적재
             new_prod = HQProduct(
                 category_id=category_id,
+                brand_id=detected_brand_id,
                 original_source_url=vendor_url,
                 cn_name=title,
                 kr_name=title[:50], # 앞 50자
@@ -152,30 +180,13 @@ def scrape_weishang_album_sync(
                 "base_price": new_prod.base_price,
                 "stock_quantity": new_prod.stock_quantity,
                 "parsed_sizes": new_prod.size_stock_config,
-                "images": new_prod.images
+                "images": new_prod.images,
+                "brand_id": detected_brand_id
             })
-            logger.info(f"Successfully integrated winwin crawled product: {new_prod.kr_name}")
+            logger.info(f"Successfully integrated winwin crawled product (reverse sequence): {new_prod.kr_name}")
             
         except Exception as e:
             logger.error(f"Error while mapping winwin item to DB: {e}", exc_info=True)
             db.rollback()
-
-    # 윈윈크롤러3 앨범 스크레퍼 스레드 인스턴스화
-    crawler_thread = WeishangCrawlingThread(
-        vendor_url=vendor_url,
-        vendor_name=os.path.basename(vendor_url)[:20],
-        target_count=target_count,
-        dest_dir=dest_dir,
-        headless_mode=True,
-        trans_options=trans_options
-    )
-    
-    # 결과 수신 시그널 연결 (더미 시그널 호출)
-    crawler_thread.result_signal.connect(on_result_received)
-    
-    # 크롤러 실행 (QThread의 run() 메서드를 직접 동기식 호출)
-    logger.info("Starting WeishangCrawlingThread run loop...")
-    crawler_thread.run()
-    logger.info("WeishangCrawlingThread run loop complete.")
-    
+            
     return scraped_products

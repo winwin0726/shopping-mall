@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
@@ -8,8 +8,8 @@ from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
-    name: str
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=50)
     phone: Optional[str] = None
 
 class UserLogin(BaseModel):
@@ -122,6 +122,8 @@ class CheckoutCartRequest(BaseModel):
     shipping_postal_code: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_address_detail: Optional[str] = None
+    coupon_id: Optional[int] = None   # 적용할 쿠폰 ID (선택)
+    used_points: int = 0              # 사용할 적립금(원) (선택)
 
 # =======================
 # Review Schemas
@@ -129,8 +131,8 @@ class CheckoutCartRequest(BaseModel):
 
 class ReviewCreate(BaseModel):
     product_id: int
-    rating: int  # 1~5
-    content: Optional[str] = None
+    rating: int = Field(ge=1, le=5)
+    content: Optional[str] = Field(default=None, max_length=2000)
 
 class ReviewResponse(BaseModel):
     id: int
@@ -148,8 +150,8 @@ class ReviewResponse(BaseModel):
 # =======================
 
 class TicketCreate(BaseModel):
-    subject: str
-    content: str
+    subject: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=5000)
 
 class TicketResponse(BaseModel):
     id: int

@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import {
@@ -40,7 +40,7 @@ interface ProductDistribution {
 }
 
 export default function OverviewTab() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [stats, setStats] = useState<Stats | null>(null);
   const [orders, setOrders] = useState<RecentOrder[]>([]);
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);

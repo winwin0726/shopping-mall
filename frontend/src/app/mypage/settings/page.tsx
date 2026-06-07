@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { API_URL } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Settings, Camera, Loader2, AlertTriangle, Crown, Ruler, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const { user, login, logout } = useAuth();
   const router = useRouter();
   const [name, setName] = useState(user?.name || "");

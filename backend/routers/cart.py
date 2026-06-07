@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from backend.database import get_db
@@ -12,12 +12,18 @@ router = APIRouter()
 @router.get("/me", response_model=List[CartItemResponse])
 def get_my_cart(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """ Get the cart items for the current user """
-    items = db.query(CartItem).filter(CartItem.user_id == current_user.id).order_by(CartItem.id.desc()).all()
-    
+    items = (
+        db.query(CartItem)
+        .options(joinedload(CartItem.product).joinedload(HQProduct.category))
+        .filter(CartItem.user_id == current_user.id)
+        .order_by(CartItem.id.desc())
+        .all()
+    )
+
     result = []
     for item in items:
-        # Load associated product
-        product = db.query(HQProduct).filter(HQProduct.id == item.product_id).first()
+        # Load associated product (eager-loaded — N+1 제거, F1)
+        product = item.product
         
         # Category resolution for fitting room mapping
         layer = "top"
@@ -60,6 +66,12 @@ def add_to_cart(
         CartItem.product_id == payload.product_id
     ).first()
 
+    # E3: 재고 초과 담기 방지 (기존 담긴 수량 + 추가 수량 > 재고 → 거부)
+    stock = product.stock_quantity if product.stock_quantity is not None else 0
+    desired = (existing_item.quantity if existing_item else 0) + payload.quantity
+    if desired > stock:
+        raise HTTPException(status_code=409, detail=f"재고가 부족합니다. (남은 수량 {stock}개)")
+
     if existing_item:
         existing_item.quantity += payload.quantity
         db.commit()
@@ -97,23 +109,30 @@ def add_to_cart(
     }
 
 
-@router.put("/items/{item_id}", response_model=CartItemResponse)
+@router.put("/items/{item_id}")
 def update_cart_item(
     item_id: int,
     payload: CartItemUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """ Update item quantity in the cart """
+    """ Update item quantity in the cart. 수량이 0 이하이면 해당 항목을 삭제한다. """
     item = db.query(CartItem).filter(CartItem.id == item_id, CartItem.user_id == current_user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Cart item not found")
 
     if payload.quantity <= 0:
+        # 정상 흐름을 예외(204)로 던지던 안티패턴 제거 — 일반 200 응답으로 삭제 통지 (A3)
         db.delete(item)
         db.commit()
-        raise HTTPException(status_code=204, detail="Deleted") # Client interprets 204
-    
+        return {"status": "deleted", "id": item_id}
+
+    # E3: 재고 초과 수정 방지
+    product = db.query(HQProduct).filter(HQProduct.id == item.product_id).first()
+    stock = product.stock_quantity if (product and product.stock_quantity is not None) else 0
+    if payload.quantity > stock:
+        raise HTTPException(status_code=409, detail=f"재고가 부족합니다. (남은 수량 {stock}개)")
+
     item.quantity = payload.quantity
     db.commit()
     db.refresh(item)

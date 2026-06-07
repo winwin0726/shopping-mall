@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import React, { useEffect, useState } from "react";
 import { Box, CheckCircle, XCircle, Loader2, AlertCircle, RefreshCw, Play, Send, X, Search, Filter, ExternalLink } from "lucide-react";
@@ -30,7 +30,7 @@ interface Vendor {
 }
 
 export default function PipelineTab() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+  const apiUrl = API_URL;
   const [products, setProducts] = useState<PendingProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

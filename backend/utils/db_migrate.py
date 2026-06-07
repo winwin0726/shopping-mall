@@ -13,10 +13,12 @@ logger = logging.getLogger(__name__)
 
 # 테이블별로 보장해야 할 추가 컬럼 {테이블: {컬럼명: DDL}}
 _ENSURE_COLUMNS = {
-    "hq_products": {"video_url": "TEXT", "wholesale_price": "INTEGER DEFAULT 0"},
+    "hq_products": {"video_url": "TEXT", "wholesale_price": "INTEGER DEFAULT 0", "brand_id": "INTEGER"},
     "orders": {"discount_amount": "INTEGER DEFAULT 0", "used_points": "INTEGER DEFAULT 0"},
     # [윈윈 도킹] 카테고리별 소매 마진
     "categories": {"margin_type": "TEXT DEFAULT 'percent'", "margin_value": "REAL DEFAULT 30.0"},
+    # [브랜드 고도화] 브랜드별 품목 매핑용 컬럼 추가
+    "brands": {"category_group": "TEXT DEFAULT 'all'"},
 }
 
 # ISO 'Z'/'T' 형식이 들어오면 Python 3.10 SQLAlchemy 가 파싱 실패 → 정규화 대상 datetime 컬럼

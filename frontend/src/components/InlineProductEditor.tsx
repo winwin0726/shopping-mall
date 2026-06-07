@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import React, { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,7 +41,7 @@ export default function InlineProductEditor({
     
     setLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+      const apiUrl = API_URL;
       const token = localStorage.getItem("token");
       
       const payload: any = {};

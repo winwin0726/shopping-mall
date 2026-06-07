@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_URL } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, CheckCircle2, Eye, EyeOff } from "lucide-react";
@@ -44,7 +45,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

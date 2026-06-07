@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
 from backend.database import get_db
-from backend.models import Order, OrderItem, HQProduct, User
-from backend.utils.deps import get_current_user, get_current_admin
+from backend.models import Order, OrderItem, HQProduct, User, Coupon
+from backend.utils.deps import get_current_user, get_current_user_optional, get_current_admin
 from backend.config import settings
 from datetime import datetime
 import logging
@@ -29,13 +29,55 @@ class OrderCreate(BaseModel):
     payment_status: Optional[str] = "PAID"
     payment_id: Optional[str] = None
     items: List[OrderItemCreate]
+    coupon_id: Optional[int] = None
+    used_points: int = 0
 
 class OrderStatusUpdate(BaseModel):
     status: str
 
+
+def _apply_discounts(db: Session, user: Optional[User], server_total: int,
+                     coupon_id: Optional[int], used_points: int):
+    """쿠폰/적립금을 검증·적용해 (최종금액, 쿠폰할인액, 사용적립금, 쿠폰객체)를 계산한다.
+    실제 차감(쿠폰 is_used, user.reward_points)은 주문 확정 후 호출측에서 수행한다.
+    - 쿠폰: 본인 소유 + 미사용만 허용, 할인은 결제금액을 넘지 않음
+    - 적립금: 보유액 이내만 허용, 쿠폰 적용 후 잔액 한도까지만 실제 사용
+    """
+    discount = 0
+    coupon = None
+    if coupon_id:
+        if not user:
+            raise HTTPException(status_code=401, detail="쿠폰 사용은 로그인이 필요합니다.")
+        coupon = db.query(Coupon).filter(
+            Coupon.id == coupon_id,
+            Coupon.user_id == user.id,
+            Coupon.is_used == False,
+        ).first()
+        if not coupon:
+            raise HTTPException(status_code=400, detail="사용할 수 없는 쿠폰입니다 (이미 사용했거나 존재하지 않음).")
+        discount = min(coupon.discount_amount or 0, server_total)
+
+    remaining = server_total - discount
+    points = max(0, int(used_points or 0))
+    points_used = 0
+    if points > 0:
+        if not user:
+            raise HTTPException(status_code=401, detail="적립금 사용은 로그인이 필요합니다.")
+        available = user.reward_points or 0
+        if points > available:
+            raise HTTPException(status_code=400, detail=f"보유 적립금({available:,}P)을 초과해 사용할 수 없습니다.")
+        points_used = min(points, remaining)
+
+    final = remaining - points_used
+    return final, discount, points_used, coupon
+
 # Endpoints
 @router.post("/orders")
-def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
+def create_order(
+    payload: OrderCreate,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
     """ Create a new order (usually called after successful payment) """
     # 클라이언트 금액/상태는 신뢰하지 않고 DB 기준으로 재계산·재고검증 (위변조·오버셀링 방지)
     server_total = 0
@@ -55,15 +97,22 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     if not valid_items:
         raise HTTPException(status_code=400, detail="유효한 주문 상품이 없습니다.")
 
+    # 쿠폰/적립금 검증·적용 (로그인 사용자만). 실제 차감은 주문 확정 후 수행.
+    final_amount, discount_amount, points_used, coupon = _apply_discounts(
+        db, current_user, server_total, payload.coupon_id, payload.used_points
+    )
+
     # 결제 상태: 개발 모드에서만 즉시 PAID, 운영에서는 PENDING (이후 payment/verify 로 확정)
     payment_status = (payload.payment_status or "PAID") if settings.PAYMENTS_DEV_MODE else "PENDING"
 
     new_order = Order(
-        user_id=payload.user_id,
+        user_id=current_user.id if current_user else payload.user_id,
         order_number=payload.order_number,
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
-        total_amount=server_total,
+        total_amount=final_amount,
+        discount_amount=discount_amount,
+        used_points=points_used,
         payment_method=payload.payment_method,
         payment_status=payment_status,
         payment_id=payload.payment_id
@@ -81,8 +130,21 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         ))
         product.stock_quantity = (product.stock_quantity or 0) - qty  # 재고 차감
 
+    # 쿠폰 사용처리 + 적립금 차감
+    if coupon:
+        coupon.is_used = True
+    if points_used > 0 and current_user:
+        current_user.reward_points = (current_user.reward_points or 0) - points_used
+
     db.commit()
-    return {"status": "success", "order_id": new_order.id, "total_amount": server_total, "payment_status": payment_status}
+    return {
+        "status": "success",
+        "order_id": new_order.id,
+        "total_amount": final_amount,
+        "discount_amount": discount_amount,
+        "used_points": points_used,
+        "payment_status": payment_status,
+    }
 
 from backend.schemas import CheckoutCartRequest
 from backend.models import CartItem
@@ -113,6 +175,11 @@ def checkout_cart(payload: CheckoutCartRequest, db: Session = Depends(get_db), c
     if not cart_rows:
         raise HTTPException(status_code=400, detail="결제할 장바구니 상품이 없습니다.")
 
+    # 쿠폰/적립금 검증·적용 (실제 차감은 주문 확정 후 수행)
+    final_amount, discount_amount, points_used, coupon = _apply_discounts(
+        db, current_user, server_total, payload.coupon_id, payload.used_points
+    )
+
     payment_status = "PAID" if settings.PAYMENTS_DEV_MODE else "PENDING"
 
     # 2. 새 주문 생성 (서버 재계산 금액 사용)
@@ -122,7 +189,9 @@ def checkout_cart(payload: CheckoutCartRequest, db: Session = Depends(get_db), c
         order_number=order_number,
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
-        total_amount=server_total,
+        total_amount=final_amount,
+        discount_amount=discount_amount,
+        used_points=points_used,
         payment_method=payload.payment_method,
         payment_status=payment_status,
         payment_id=payload.payment_id,
@@ -145,22 +214,41 @@ def checkout_cart(payload: CheckoutCartRequest, db: Session = Depends(get_db), c
         product.stock_quantity = (product.stock_quantity or 0) - qty
         db.delete(cart_item)
 
+    # 쿠폰 사용처리 + 적립금 차감
+    if coupon:
+        coupon.is_used = True
+    if points_used > 0:
+        current_user.reward_points = (current_user.reward_points or 0) - points_used
+
     db.commit()
-    return {"status": "success", "order_number": order_number, "order_id": new_order.id, "total_amount": server_total}
+    return {
+        "status": "success",
+        "order_number": order_number,
+        "order_id": new_order.id,
+        "total_amount": final_amount,
+        "discount_amount": discount_amount,
+        "used_points": points_used,
+    }
 
 @router.get("/me/orders")
 def get_my_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """ Get orders for the currently logged in user """
-    orders = db.query(Order).filter(Order.user_id == current_user.id).order_by(Order.id.desc()).all()
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(Order.user_id == current_user.id)
+        .order_by(Order.id.desc())
+        .all()
+    )
     
     result = []
     for o in orders:
-        items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
+        items = o.items
         item_details = []
         product_names = []
         
         for item in items:
-            product = db.query(HQProduct).filter(HQProduct.id == item.product_id).first()
+            product = item.product
             prod_name = product.kr_name if product else "알 수 없는 상품"
             product_names.append(prod_name)
             item_details.append({
@@ -197,7 +285,7 @@ def get_admin_orders(
     _admin: User = Depends(get_current_admin)
 ):
     """ HQ Admin: Get all orders with optional filtering """
-    query = db.query(Order)
+    query = db.query(Order).options(joinedload(Order.items).joinedload(OrderItem.product))
     
     if status:
         query = query.filter(Order.payment_status == status)
@@ -212,12 +300,12 @@ def get_admin_orders(
     result = []
     for o in orders:
         # Get items for this order
-        items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
+        items = o.items
         item_details = []
         product_names = []
         
         for item in items:
-            product = db.query(HQProduct).filter(HQProduct.id == item.product_id).first()
+            product = item.product
             prod_name = product.kr_name if product else "알 수 없는 상품"
             product_names.append(prod_name)
             item_details.append({
@@ -322,8 +410,9 @@ def get_order_stats(db: Session = Depends(get_db), _admin: User = Depends(get_cu
         "order_count": order_count,
         "avg_order_value": avg_order_value,
         "pending_count": pending_count,
-        "revenue_trend": "up",      # Dummy trend 
-        "order_trend": "up"         # Dummy trend
+        # H2: 실데이터 기반 추세 산출 전까지 더미 "up" 대신 None (프론트가 null 가드 → 배지 숨김)
+        "revenue_trend": None,
+        "order_trend": None
     }
 
 # ================================

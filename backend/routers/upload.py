@@ -20,26 +20,45 @@ CRAWLED_PATH = os.path.join(UPLOAD_PATH, "crawled")
 if not os.path.exists(CRAWLED_PATH):
     os.makedirs(CRAWLED_PATH)
 
+# 허용 확장자/용량 제한 (B2: 악성 파일 업로드 차단 — SVG/HTML 등 실행가능 포맷 거부)
+ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+ALLOWED_VIDEO_EXT = {".mp4", ".webm", ".mov", ".m4v"}
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
+
 
 async def _save_image(file: UploadFile) -> dict:
     """단일 이미지 또는 동영상 파일 저장 공통 로직"""
     is_image = file.content_type and file.content_type.startswith("image/")
     is_video = file.content_type and file.content_type.startswith("video/")
-    
+
     if not is_image and not is_video:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"이미지 또는 동영상 파일만 업로드 가능합니다: {file.filename}"
         )
 
-    ext = os.path.splitext(file.filename or "")[1]
+    ext = os.path.splitext(file.filename or "")[1].lower()
     if not ext:
         ext = ".mp4" if is_video else ".jpg"
-        
+
+    # 확장자 화이트리스트 검증 (content-type 은 위조 가능하므로 확장자도 함께 제한)
+    allowed_ext = ALLOWED_VIDEO_EXT if is_video else ALLOWED_IMAGE_EXT
+    if ext not in allowed_ext:
+        raise HTTPException(
+            status_code=400,
+            detail=f"허용되지 않은 파일 형식입니다({ext}). 허용: {', '.join(sorted(allowed_ext))}"
+        )
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"파일이 너무 큽니다. 최대 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB 까지 업로드 가능합니다."
+        )
+
     unique_filename = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(UPLOAD_PATH, unique_filename)
 
-    content = await file.read()
     with open(file_path, "wb") as f:
         f.write(content)
 

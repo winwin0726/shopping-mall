@@ -1,48 +1,120 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from backend.database import get_db
-from backend.models import HQProduct, Category
+from backend.models import HQProduct, Category, Brand
 
 router = APIRouter()
 
+# 상품 대표(피팅용 누끼) 이미지가 없을 때의 폴백 (D4: 매직 URL 상수화)
+FALLBACK_PRODUCT_IMAGE = "https://cdn-icons-png.flaticon.com/512/863/863684.png"
+
+
+def _display_image(p) -> str:
+    """상품 목록/카드용 표시 이미지 단일 규칙 (D5: 누끼 → 피팅 → 갤러리 → 폴백)."""
+    return (
+        p.transparent_item_image_url
+        or p.ai_fitting_image_url
+        or (p.images[0] if p.images else None)
+        or FALLBACK_PRODUCT_IMAGE
+    )
+
+
 # Schema for response (Mocking Pydantic for brevity, full Pydantic should be in schemas.py)
+# 슬래시 유무 모두 직접 응답 → 프록시 뒤에서 trailing-slash 리다이렉트(내부주소 노출) 방지
+@router.get("/brands", response_model=List[dict])
+def get_all_brands(
+    category_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    활성화된 브랜드 목록 전체를 반환합니다.
+    category_name 이 제공될 경우, 해당 품목군(또는 all) 브랜드만 필터링하여 반환합니다.
+    """
+    query = db.query(Brand).filter(Brand.is_active == True)
+    
+    if category_name:
+        from backend.utils.brand_detector import get_category_group_key
+        group_key = get_category_group_key(category_name)
+        if group_key:
+            query = query.filter(
+                (Brand.category_group == 'all') | 
+                (Brand.category_group.like(f"%{group_key}%"))
+            )
+            
+    brands = query.order_by(Brand.eng_name.asc()).all()
+    result = []
+    for b in brands:
+        result.append({
+            "id": b.id,
+            "name": b.name,
+            "eng_name": b.eng_name,
+            "slug": b.slug,
+            "logo_url": b.logo_url,
+            "is_premium": b.is_premium,
+            "category_group": b.category_group
+        })
+    return result
+
+@router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
-def get_products(db: Session = Depends(get_db)):
+def get_products(
+    brand_id: Optional[int] = Query(None),
+    brand_slug: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     """
     Returns the list of HQ products with their transparent images for VTON.
     Using real DB data.
     """
-    products = db.query(HQProduct).join(Category).filter(HQProduct.status == "APPROVED").all()
+    query = db.query(HQProduct).outerjoin(Category).outerjoin(Brand).filter(HQProduct.status == "APPROVED")
+    
+    if brand_id is not None:
+        query = query.filter(HQProduct.brand_id == brand_id)
+    if brand_slug is not None:
+        query = query.filter(Brand.slug == brand_slug)
+        
+    products = query.all()
     
     result = []
     for p in products:
-        # DB에서 slug (top, bottom, accessory) 등을 바로 사용하도록 설정
         cat_slug = p.category.slug if p.category else "top"
-        # 피팅룸 컴포넌트 호환성을 위해 "상의", "하의" 등을 top, bottom 매핑할 수 있으나 임시로 slug 사용.
-        # category_slug -> top, bottom, accessory
         layer = "top"
-        if "bottom" in cat_slug or "하의" in p.category.name:
-            layer = "bottom"
-        elif "acc" in cat_slug or "가방" in p.category.name:
-            layer = "accessory"
+        if p.category:
+            if "bottom" in cat_slug or "하의" in p.category.name:
+                layer = "bottom"
+            elif "acc" in cat_slug or "가방" in p.category.name:
+                layer = "accessory"
             
         result.append({
             "id": p.id,
             "name": p.kr_name,
             "category": layer,
+            "category_id": p.category_id,
+            "category_name": p.category.name if p.category else "기타",
+            "brand_id": p.brand_id,
+            "brand_name": p.brand.name if p.brand else "미지정",
+            "brand_eng_name": p.brand.eng_name if p.brand else "",
             "price": p.base_price,
-            "transparentImage": p.transparent_item_image_url or "https://cdn-icons-png.flaticon.com/512/863/863684.png"
+            "sale_price": p.sale_price,
+            "discount_rate": p.discount_rate,
+            "transparentImage": _display_image(p),
         })
     
     return result
 
 @router.get("/category/{main_category}", response_model=List[dict])
-def get_products_by_category(main_category: str, sub_category: str = None, db: Session = Depends(get_db)):
+def get_products_by_category(
+    main_category: str, 
+    sub_category: str = None, 
+    brand_id: Optional[int] = Query(None),
+    brand_slug: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     """
     Returns products filtered by main category (e.g., '남성의류') and optionally by subcategory.
     """
-    query = db.query(HQProduct).join(Category).filter(HQProduct.status == "APPROVED")
+    query = db.query(HQProduct).outerjoin(Category).outerjoin(Brand).filter(HQProduct.status == "APPROVED")
     
     # 1. 대분류 카테고리(부모) 및 그 하위 중/소분류 카테고리 상품 필터링 (3단계 재귀 지원)
     if main_category and main_category != "전체" and main_category != "summer-sale":
@@ -66,7 +138,7 @@ def get_products_by_category(main_category: str, sub_category: str = None, db: S
     if sub_category and sub_category != "전체":
         main_cat = db.query(Category).filter(Category.name == main_category, Category.parent_id == None).first()
         if main_cat:
-            # 해당 대분류 아래의 모든 하위 중분류 및 소분류 수집하여 이름 매칭 (동명이명 중복 방지)
+            # 해당 대분류 아래 of 모든 하위 중분류 및 소분류 수집하여 이름 매칭 (동명이명 중복 방지)
             sub_cats = db.query(Category).filter(Category.parent_id == main_cat.id).all()
             sub_cat_ids = [sc.id for sc in sub_cats]
             sub_sub_cats = db.query(Category).filter(Category.parent_id.in_(sub_cat_ids)).all() if sub_cat_ids else []
@@ -87,25 +159,38 @@ def get_products_by_category(main_category: str, sub_category: str = None, db: S
         else:
             query = query.filter((Category.slug == sub_category) | (Category.name == sub_category))
         
+    # 브랜드 필터링
+    if brand_id is not None:
+        query = query.filter(HQProduct.brand_id == brand_id)
+    if brand_slug is not None:
+        query = query.filter(Brand.slug == brand_slug)
+        
     real_products = query.all()
-
     
     result = []
     for p in real_products:
         cat_slug = p.category.slug if p.category else "top"
         layer = "top"
-        if "bottom" in cat_slug or "하의" in p.category.name:
-            layer = "bottom"
-        elif "acc" in cat_slug or "가방" in p.category.name.lower():
-            layer = "accessory"
+        if p.category:
+            if "bottom" in cat_slug or "하의" in p.category.name:
+                layer = "bottom"
+            elif "acc" in cat_slug or "가방" in p.category.name.lower():
+                layer = "accessory"
             
         result.append({
             "id": p.id,
             "name": p.kr_name,
             "category": layer,
+            "category_id": p.category_id,
+            "category_name": p.category.name if p.category else "기타",
             "sub_category": p.category.name if p.category else "기타",
+            "brand_id": p.brand_id,
+            "brand_name": p.brand.name if p.brand else "미지정",
+            "brand_eng_name": p.brand.eng_name if p.brand else "",
             "price": p.base_price,
-            "transparentImage": p.ai_fitting_image_url or "https://cdn-icons-png.flaticon.com/512/863/863684.png"
+            "sale_price": p.sale_price,
+            "discount_rate": p.discount_rate,
+            "transparentImage": _display_image(p),
         })
         
     return result
@@ -143,7 +228,7 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
             "discount_rate": r.discount_rate,
             "image": (r.images[0] if r.images and len(r.images) > 0 
                       else r.ai_fitting_image_url 
-                      or "https://cdn-icons-png.flaticon.com/512/863/863684.png"),
+                      or FALLBACK_PRODUCT_IMAGE),
         })
     
     cat_name = product.category.name if product.category else "기타"
@@ -154,6 +239,9 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
         "cn_name": product.cn_name,
         "category": cat_name,
         "category_id": product.category_id,
+        "brand_id": product.brand_id,
+        "brand_name": product.brand.name if product.brand else "미지정",
+        "brand_eng_name": product.brand.eng_name if product.brand else "",
         "description": product.kr_description,
         "description_html": product.description_html,
         "base_price": product.base_price,
@@ -187,7 +275,7 @@ def get_transparent_image(product_id: int, db: Session = Depends(get_db)):
     if not transparent_url and product.images and len(product.images) > 0:
         transparent_url = product.images[0]
     if not transparent_url:
-        transparent_url = product.ai_fitting_image_url or "https://cdn-icons-png.flaticon.com/512/863/863684.png"
+        transparent_url = product.ai_fitting_image_url or FALLBACK_PRODUCT_IMAGE
     
     return {
         "product_id": product_id,

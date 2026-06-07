@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Any
 from pydantic import BaseModel
 from backend.database import get_db
-from backend.models import HQProduct, Category, User, Tenant, SupportTicket
+from backend.models import HQProduct, Category, User, Tenant, SupportTicket, Brand
 from backend.config import settings
 from backend.utils.gemini import generate_text, GeminiError
 
@@ -177,6 +177,98 @@ def update_category_margin(cat_id: int, payload: CategoryMarginUpdate, recompute
 
 
 # ==========================================
+# Brand Management (브랜드 관리)
+# ==========================================
+
+class BrandCreate(BaseModel):
+    name: str
+    eng_name: str
+    slug: str
+    logo_url: Optional[str] = None
+    is_premium: bool = False
+    is_active: bool = True
+
+class BrandUpdate(BaseModel):
+    name: Optional[str] = None
+    eng_name: Optional[str] = None
+    slug: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_premium: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+@router.get("/brands", response_model=List[dict])
+def get_admin_brands(db: Session = Depends(get_db)):
+    """ HQ Admin: 모든 브랜드 목록 조회 """
+    brands = db.query(Brand).order_by(Brand.eng_name.asc()).all()
+    result = []
+    for b in brands:
+        result.append({
+            "id": b.id,
+            "name": b.name,
+            "eng_name": b.eng_name,
+            "slug": b.slug,
+            "logo_url": b.logo_url,
+            "is_premium": b.is_premium,
+            "is_active": b.is_active
+        })
+    return result
+
+@router.post("/brand", response_model=dict)
+def create_brand(payload: BrandCreate, db: Session = Depends(get_db)):
+    """ HQ Admin: 새 브랜드 생성 """
+    existing = db.query(Brand).filter(Brand.slug == payload.slug).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="이미 존재하는 슬러그(slug)입니다.")
+        
+    new_brand = Brand(
+        name=payload.name,
+        eng_name=payload.eng_name,
+        slug=payload.slug,
+        logo_url=payload.logo_url,
+        is_premium=payload.is_premium,
+        is_active=payload.is_active
+    )
+    db.add(new_brand)
+    db.commit()
+    db.refresh(new_brand)
+    return {"status": "success", "id": new_brand.id, "message": f"브랜드 '{new_brand.name}'가 생성되었습니다."}
+
+@router.put("/brand/{brand_id}", response_model=dict)
+def update_brand(brand_id: int, payload: BrandUpdate, db: Session = Depends(get_db)):
+    """ HQ Admin: 브랜드 정보 수정 """
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="브랜드를 찾을 수 없습니다.")
+        
+    update_data = payload.model_dump(exclude_unset=True)
+    if "slug" in update_data and update_data["slug"] != brand.slug:
+        existing = db.query(Brand).filter(Brand.slug == update_data["slug"]).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="이미 사용 중인 슬러그(slug)입니다.")
+            
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(brand, field, value)
+            
+    db.commit()
+    return {"status": "success", "id": brand.id, "message": f"브랜드 '{brand.name}' 정보가 수정되었습니다."}
+
+@router.delete("/brand/{brand_id}")
+def delete_brand(brand_id: int, db: Session = Depends(get_db)):
+    """ HQ Admin: 브랜드 삭제 """
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="브랜드를 찾을 수 없습니다.")
+        
+    db.query(HQProduct).filter(HQProduct.brand_id == brand_id).update({HQProduct.brand_id: None})
+    
+    brand_name = brand.name
+    db.delete(brand)
+    db.commit()
+    return {"status": "success", "message": f"브랜드 '{brand_name}'가 삭제되었습니다."}
+
+
+# ==========================================
 # Product Management (상품 관리 CRUD)
 # ==========================================
 
@@ -184,6 +276,7 @@ class ProductCreate(BaseModel):
     kr_name: str
     base_price: int
     category_id: int
+    brand_id: Optional[int] = None
     cn_name: Optional[str] = None
     kr_description: Optional[str] = None
     description_html: Optional[str] = None
@@ -202,6 +295,7 @@ class ProductUpdate(BaseModel):
     kr_name: Optional[str] = None
     base_price: Optional[int] = None
     category_id: Optional[int] = None
+    brand_id: Optional[int] = None
     cn_name: Optional[str] = None
     kr_description: Optional[str] = None
     description_html: Optional[str] = None
@@ -276,6 +370,8 @@ def get_admin_products(
             "sku": p.sku,
             "category_id": p.category_id,
             "category_name": cat_name,
+            "brand_id": p.brand_id,
+            "brand_name": p.brand.name if p.brand else "미지정",
             "status": p.status,
             "ai_fitting_image_url": p.ai_fitting_image_url,
             "transparent_item_image_url": p.transparent_item_image_url,
@@ -310,6 +406,7 @@ def create_product(payload: ProductCreate, bg_tasks: BackgroundTasks, db: Sessio
         keywords=payload.keywords,
         images=payload.images,
         category_id=payload.category_id,
+        brand_id=payload.brand_id,
         kr_description=payload.kr_description,
         description_html=payload.description_html,
         ai_fitting_image_url=payload.ai_fitting_image_url,
@@ -396,6 +493,36 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 class ExtractTransparentRequest(BaseModel):
     image_url: str
+
+@router.post("/ai/extract-transparent")
+async def extract_image_transparent_generic(payload: ExtractTransparentRequest):
+    """
+    HQ Admin: 특정 이미지 1컷에 대해 수동으로 AI 누끼(배경 제거) 가공을 수행합니다 (상품 ID 무관).
+    """
+    orig_url = payload.image_url.strip()
+    if not orig_url:
+        raise HTTPException(status_code=400, detail="이미지 주소가 올바르지 않습니다.")
+        
+    # 로컬 정적 서비스 경로 대응
+    if not orig_url.startswith("http") and not orig_url.startswith("/"):
+        orig_url = f"{settings.BACKEND_URL}/{orig_url}"
+    elif orig_url.startswith("/"):
+        orig_url = f"{settings.BACKEND_URL}{orig_url}"
+        
+    from backend.ai_engine.vton import AIFittingPreGenerator
+    try:
+        generator = AIFittingPreGenerator()
+        transparent_url = await generator.extract_transparent_clothing(orig_url)
+        if transparent_url:
+            return {
+                "status": "success",
+                "message": "AI 누끼 가공이 완료되었습니다.",
+                "transparent_item_image_url": transparent_url
+            }
+        else:
+            raise HTTPException(status_code=500, detail="AI 누끼 이미지 생성 결과가 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"배경 제거 중 AI 엔진 내부 오류 발생: {str(e)}")
 
 @router.post("/product/{product_id}/extract-transparent")
 async def extract_product_image_transparent(product_id: int, payload: ExtractTransparentRequest, db: Session = Depends(get_db)):

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingBag, Search, Menu, X, User, LogOut, Settings, MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
+import { API_URL } from "@/lib/api";
 
 const CATEGORIES = [
   "남성의류", "여성의류", "가방", "지갑", "시계", "악세사리", "신발", "국내배송"
@@ -71,6 +72,25 @@ export default function Navigation() {
   const pathname = usePathname();
   const { themeConfig, tenantName } = useTheme();
 
+  // 브랜드 목록 상태 및 카테고리 탭 상태 추가
+  const [brands, setBrands] = useState<{ id: number; name: string; eng_name: string; slug: string; is_premium: boolean; category_group: string }[]>([]);
+  const [isBrandOpen, setIsBrandOpen] = useState(false);
+  const [activeBrandTab, setActiveBrandTab] = useState<"all" | "bag" | "shoes" | "watch">("all");
+
+  useEffect(() => {
+    async function fetchBrands() {
+      try {
+        const res = await fetch(`${API_URL}/api/products/brands`);
+        if (res.ok) {
+          setBrands(await res.json());
+        }
+      } catch (error) {
+        console.warn("Failed to fetch brands for GNB", error);
+      }
+    }
+    fetchBrands();
+  }, []);
+
   if (pathname?.startsWith("/admin")) {
     return null;
   }
@@ -87,6 +107,13 @@ export default function Navigation() {
 
   const isVtonEnabled = themeConfig.features?.enable_vton !== false;
   const isCheckoutEnabled = themeConfig.features?.enable_checkout !== false;
+
+  const filteredBrands = brands.filter((b: any) => {
+    if (activeBrandTab === "all") {
+      return b.category_group === "all";
+    }
+    return b.category_group && b.category_group.includes(activeBrandTab);
+  });
 
   return (
     <nav className="fixed top-0 w-full z-50 glass-panel border-b border-white/20 flex flex-col">
@@ -139,6 +166,88 @@ export default function Navigation() {
               </motion.div>
             )}
             
+            {/* 브랜드관 드롭다운 메뉴 */}
+            <div 
+              className="relative py-2"
+              onMouseEnter={() => setIsBrandOpen(true)}
+              onMouseLeave={() => setIsBrandOpen(false)}
+            >
+              <button
+                className="text-gray-700 dark:text-gray-300 font-bold hover:text-opacity-80 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                브랜드관 <span className="text-[10px] opacity-75">▼</span>
+              </button>
+              <div 
+                className="absolute bottom-0 w-full h-0.5 scale-x-0 transition-transform origin-left rounded-full" 
+                style={{ 
+                  backgroundColor: themeConfig.primaryColor || "#2563eb",
+                  transform: isBrandOpen ? "scaleX(1)" : "scaleX(0)"
+                }}
+              />
+              
+              <AnimatePresence>
+                {isBrandOpen && brands.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute left-1/2 -translate-x-1/2 top-full pt-2 w-[600px] z-50"
+                  >
+                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border border-slate-200/50 dark:border-slate-800/50 rounded-2xl shadow-2xl p-4 flex gap-4 h-[350px]">
+                      {/* Left Tab Menu */}
+                      <div className="w-1/4 border-r border-slate-100 dark:border-slate-800 pr-2 flex flex-col gap-1 shrink-0 select-none">
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-2 px-2 uppercase tracking-wider">카테고리</div>
+                        {[
+                          { id: "all", label: "종합 명품" },
+                          { id: "bag", label: "가방 / 지갑" },
+                          { id: "shoes", label: "슈즈 에디션" },
+                          { id: "watch", label: "럭셔리 워치" },
+                        ].map((tab) => (
+                          <button
+                            key={tab.id}
+                            onMouseEnter={() => setActiveBrandTab(tab.id as any)}
+                            onClick={() => setActiveBrandTab(tab.id as any)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                              activeBrandTab === tab.id
+                                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                                : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Right Brand Grid */}
+                      <div className="w-3/4 flex flex-col h-full overflow-hidden">
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider flex justify-between">
+                          <span>브랜드 목록</span>
+                          <span>총 {filteredBrands.length}개</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-1 flex-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                          {filteredBrands.map((b) => (
+                            <Link
+                              key={b.slug}
+                              href={`/brand/${b.slug}`}
+                              onClick={() => setIsBrandOpen(false)}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors group/brand-item"
+                            >
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover/brand-item:text-blue-600 dark:group-hover/brand-item:text-blue-400 transition-colors truncate mr-1">
+                                {b.name}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-mono tracking-wider dark:text-slate-500 group-hover/brand-item:text-slate-600 dark:group-hover/brand-item:text-slate-355 transition-colors truncate shrink-0">
+                                {b.eng_name.toUpperCase()}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {CATEGORIES.map((category) => (
               <motion.div key={category} whileHover={{ y: -2 }} className="relative group py-2">
                 <Link
@@ -279,6 +388,54 @@ export default function Navigation() {
                   ⚙️ 관리자 설정 페이지
                 </Link>
               )}
+              
+              {/* 모바일 브랜드 메뉴 */}
+              {brands.length > 0 && (
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-4 mb-2">
+                  <div className="text-sm font-bold text-slate-400 dark:text-slate-500 mb-2 flex justify-between items-center">
+                    <span>인기 브랜드관</span>
+                    <div className="flex gap-1">
+                      {[
+                        { id: "all", label: "종합" },
+                        { id: "bag", label: "가방" },
+                        { id: "shoes", label: "신발" },
+                        { id: "watch", label: "시계" },
+                      ].map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setActiveBrandTab(t.id as any)}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
+                            activeBrandTab === t.id
+                              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                              : "bg-slate-105 text-slate-500 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {brands
+                      .filter((b: any) => {
+                        if (activeBrandTab === "all") return b.category_group === "all";
+                        return b.category_group && b.category_group.includes(activeBrandTab);
+                      })
+                      .map((b) => (
+                        <Link
+                          key={b.slug}
+                          href={`/brand/${b.slug}`}
+                          onClick={() => setIsOpen(false)}
+                          className="px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100/50 dark:bg-slate-900/50 rounded-lg border border-slate-200/20 dark:border-slate-800/20 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors flex flex-col"
+                        >
+                          <span>{b.name}</span>
+                          <span className="text-[8px] font-normal opacity-75 text-slate-400 truncate">{b.eng_name}</span>
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {CATEGORIES.map((category) => (
                 <Link
                   key={category}

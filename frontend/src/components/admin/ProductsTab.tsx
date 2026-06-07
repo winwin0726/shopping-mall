@@ -21,6 +21,8 @@ interface Product {
   sku: string | null;
   category_id: number;
   category_name: string | null;
+  brand_id?: number | null;
+  brand_name?: string | null;
   status: string;
   ai_fitting_image_url: string | null;
   transparent_item_image_url: string | null;
@@ -48,6 +50,7 @@ interface NewProductForm {
   discount_rate: string;
   stock_quantity: string;
   category_id: string;
+  brand_id: string;
   kr_description: string;
   description_html: string;
   sku: string;
@@ -61,7 +64,7 @@ interface NewProductForm {
 
 const emptyForm: NewProductForm = {
   kr_name: "", cn_name: "", base_price: "", sale_price: "",
-  discount_rate: "", stock_quantity: "0", category_id: "", kr_description: "",
+  discount_rate: "", stock_quantity: "0", category_id: "", brand_id: "", kr_description: "",
   description_html: "",
   sku: "", ai_fitting_image_url: "", transparent_item_image_url: "", images: [], video_url: "",
   tag_string: "",
@@ -140,11 +143,17 @@ function SmartImageUploader({
   onImagesChange,
   mainImageUrl,
   onMainImageUrlChange,
+  isSelectingForVton = false,
+  selectedImageForVton = null,
+  onSelectImageForVton,
 }: {
   images: string[];
   onImagesChange: (imgs: string[]) => void;
   mainImageUrl: string;
   onMainImageUrlChange: (url: string) => void;
+  isSelectingForVton?: boolean;
+  selectedImageForVton?: string | null;
+  onSelectImageForVton?: (url: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -349,14 +358,23 @@ function SmartImageUploader({
             {images.map((url, i) => (
               <div
                 key={`${url}-${i}`}
-                draggable
-                onDragStart={() => handleImgDragStart(i)}
-                onDragOver={e => handleImgDragOver(e, i)}
-                onDrop={() => handleImgDrop(i)}
-                className={`relative group aspect-square rounded-lg overflow-hidden border-2 transition-all duration-300 cursor-grab active:cursor-grabbing transform hover:scale-[1.04] active:scale-[0.98]
-                  ${url === mainImageUrl
-                    ? "border-yellow-400 shadow-lg shadow-yellow-500/10"
-                    : "border-slate-700 hover:border-slate-500"
+                draggable={!isSelectingForVton}
+                onDragStart={() => !isSelectingForVton && handleImgDragStart(i)}
+                onDragOver={e => !isSelectingForVton && handleImgDragOver(e, i)}
+                onDrop={() => !isSelectingForVton && handleImgDrop(i)}
+                onClick={() => {
+                  if (isSelectingForVton && onSelectImageForVton) {
+                    onSelectImageForVton(url);
+                  }
+                }}
+                className={`relative group aspect-square rounded-lg overflow-hidden border-2 transition-all duration-300 transform
+                  ${isSelectingForVton 
+                    ? url === selectedImageForVton
+                      ? "border-purple-500 scale-[1.04] ring-4 ring-purple-500/30 cursor-pointer"
+                      : "border-slate-700 hover:border-purple-400/70 cursor-pointer opacity-70 hover:opacity-100"
+                    : url === mainImageUrl
+                      ? "border-yellow-400 shadow-lg shadow-yellow-500/10 cursor-grab active:cursor-grabbing hover:scale-[1.04] active:scale-[0.98]"
+                      : "border-slate-700 hover:border-slate-500 cursor-grab active:cursor-grabbing hover:scale-[1.04] active:scale-[0.98]"
                   }
                   ${draggedIndex === i ? "opacity-35 scale-90 border-blue-500" : "opacity-100"}
                 `}
@@ -368,9 +386,20 @@ function SmartImageUploader({
                   onError={e => { (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%231e293b' width='100' height='100'/%3E%3Ctext x='50' y='55' text-anchor='middle' fill='%23475569' font-size='12'%3EError%3C/text%3E%3C/svg%3E"; }}
                 />
 
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 p-0.5 rounded cursor-grab">
-                  <GripVertical size={10} className="text-white" />
-                </div>
+                {/* 선택 모드일 때 선택 표시 오버레이 */}
+                {isSelectingForVton && url === selectedImageForVton && (
+                  <div className="absolute inset-0 bg-purple-500/10 flex items-center justify-center pointer-events-none z-10 border border-purple-500 rounded-lg">
+                    <div className="bg-purple-600 text-white rounded-full p-1 shadow-md">
+                      <Check size={16} />
+                    </div>
+                  </div>
+                )}
+
+                {!isSelectingForVton && (
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 p-0.5 rounded cursor-grab">
+                    <GripVertical size={10} className="text-white" />
+                  </div>
+                )}
 
                 {/* 대표 이미지 뱃지 */}
                 {url === mainImageUrl && (
@@ -384,35 +413,37 @@ function SmartImageUploader({
                   {i + 1}
                 </div>
 
-                {/* 호버 컨트롤 */}
-                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-10">
-                  <button
-                    type="button"
-                    onClick={() => setEnlargedUrl(url)}
-                    className="p-1.5 bg-slate-200 hover:bg-white text-slate-900 rounded transition transform hover:scale-110 active:scale-95"
-                    title="확대보기"
-                  >
-                    <Eye size={11} />
-                  </button>
-                  {url !== mainImageUrl && (
+                {/* 호버 컨트롤 - 선택 모드가 아닐 때만 렌더링 */}
+                {!isSelectingForVton && (
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-10">
                     <button
                       type="button"
-                      onClick={() => setAsMain(url)}
-                      className="p-1.5 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded transition transform hover:scale-110 active:scale-95"
-                      title="대표 이미지로 설정"
+                      onClick={() => setEnlargedUrl(url)}
+                      className="p-1.5 bg-slate-200 hover:bg-white text-slate-900 rounded transition transform hover:scale-110 active:scale-95"
+                      title="확대보기"
                     >
-                      <Star size={11} />
+                      <Eye size={11} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="p-1.5 bg-red-600 hover:bg-red-500 text-white rounded transition transform hover:scale-110 active:scale-95"
-                    title="삭제"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
+                    {url !== mainImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setAsMain(url)}
+                        className="p-1.5 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded transition transform hover:scale-110 active:scale-95"
+                        title="대표 이미지로 설정"
+                      >
+                        <Star size={11} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="p-1.5 bg-red-600 hover:bg-red-500 text-white rounded transition transform hover:scale-110 active:scale-95"
+                      title="삭제"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -468,6 +499,99 @@ export default function ProductsTab() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const perPage = 15;
+
+  // 썸네일 실시간 미리보기 팝업용 상태
+  const [preview, setPreview] = useState<{ url: string; x: number; y: number } | null>(null);
+  const [activeUrl, setActiveUrl] = useState<string | null>(null);
+
+  const handleThumbnailMouseEnter = (url: string, e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = rect.left - 320; // 300px + 20px gap
+    if (x < 10) {
+      x = rect.right + 20; // 화면 왼쪽을 벗어나면 우측에 띄움
+    }
+    let y = rect.top - 130; // 300px 팝업의 절반이 썸네일 중앙에 정렬되도록 계산
+    
+    // 화면 위아래 경계를 벗어나지 않도록 보정
+    if (y + 300 > window.innerHeight) {
+      y = window.innerHeight - 310;
+    }
+    if (y < 10) {
+      y = 10;
+    }
+
+    setPreview({ url, x, y });
+    setActiveUrl(url);
+  };
+
+  const handleThumbnailMouseLeave = () => {
+    setPreview(null);
+  };
+
+  // VTON 가상 피팅 누끼용 이미지 선택 관련 상태
+  const [isSelectingForVton, setIsSelectingForVton] = useState(false);
+  const [selectedImageForVton, setSelectedImageForVton] = useState<string | null>(null);
+  const [vtonExtractLoading, setVtonExtractLoading] = useState(false);
+
+  const handleVtonImageExtract = async () => {
+    if (!selectedImageForVton) {
+      alert("가공할 상품 이미지를 선택해 주세요.");
+      return;
+    }
+    
+    setVtonExtractLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/api/admin/ai/extract-transparent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: selectedImageForVton }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "누끼 가공 중 오류가 발생했습니다.");
+      }
+      
+      setCreateForm(f => ({ ...f, transparent_item_image_url: data.transparent_item_image_url }));
+      setSelectedImageForVton(null); // 사용 완료 시 선택 이미지 상태 초기화
+      alert("AI 누끼 가공이 완료되어 누끼 이미지 칸에 자동으로 반영되었습니다.");
+    } catch (err: any) {
+      alert(`누끼 가공 실패: ${err.message}`);
+    } finally {
+      setVtonExtractLoading(false);
+    }
+  };
+
+  // 테이블 컬럼 너비 상태 (ID, 이미지, 상품명, 카테고리, 판매가, 재고, 상태, 업데이트 날짜, 관리)
+  const [colWidths, setColWidths] = useState<number[]>([60, 80, 300, 150, 150, 100, 100, 120, 100]);
+
+  // 독립형 컬럼 너비 드래그 조절 핸들러 (최소 35px 한 글자 크기 제한)
+  const startResize = useCallback((e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    const startX = e.pageX;
+    const startWidth = colWidths[index];
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.pageX - startX;
+      const newWidth = Math.max(35, startWidth + deltaX); // 최소 너비 35px 제한
+      setColWidths((prev) => {
+        const next = [...prev];
+        next[index] = newWidth;
+        return next;
+      });
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [colWidths]);
+
+  // 브랜드 목록 상태 추가
+  const [adminBrands, setAdminBrands] = useState<{ id: number; name: string; eng_name: string }[]>([]);
 
   // 인라인 편집
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -716,6 +840,12 @@ export default function ProductsTab() {
       .then(setCategories)
       .catch(() => {});
 
+    // 브랜드 목록 fetch 추가
+    authFetch(`${API_URL}/api/products/brands`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setAdminBrands)
+      .catch(() => {});
+
     // 크롤러 연동 설정 로드
     authFetch(`${API_URL}/api/crawler/settings`)
       .then(r => r.ok ? r.json() : null)
@@ -776,6 +906,7 @@ export default function ProductsTab() {
       discount_rate: String(p.discount_rate || ""),
       stock_quantity: String(p.stock_quantity || "0"),
       category_id: String(p.category_id || ""),
+      brand_id: p.brand_id ? String(p.brand_id) : "",
       kr_description: p.kr_description || "",
       description_html: p.description_html || "",
       sku: p.sku || "",
@@ -935,6 +1066,7 @@ export default function ProductsTab() {
 
       setCreateForm({
         category_id: mapped.category_id ? String(mapped.category_id) : createForm.category_id,
+        brand_id: mapped.brand_id ? String(mapped.brand_id) : "",
         cn_name: createForm.cn_name || mapped.kr_name,
         kr_name: mapped.kr_name || "",
         kr_description: mapped.kr_description || "",
@@ -1023,6 +1155,7 @@ export default function ProductsTab() {
 
     setCreateForm({
       category_id: mapped.category_id ? String(mapped.category_id) : "1",
+      brand_id: mapped.brand_id ? String(mapped.brand_id) : "",
       cn_name: cnName,
       kr_name: mapped.kr_name || "",
       kr_description: mapped.kr_description || "",
@@ -1151,6 +1284,7 @@ export default function ProductsTab() {
         kr_name: createForm.kr_name,
         base_price: parseInt(createForm.base_price) || 0,
         category_id: parseInt(createForm.category_id),
+        brand_id: createForm.brand_id ? parseInt(createForm.brand_id) : null,
         stock_quantity: parseInt(createForm.stock_quantity) || 0,
         transparent_item_image_url: createForm.transparent_item_image_url || null,
         description_html: createForm.description_html || null,
@@ -1508,18 +1642,81 @@ export default function ProductsTab() {
       {/* 테이블 */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="text-left" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
             <thead>
               <tr className="bg-slate-800/60 border-b border-slate-700">
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">ID</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">이미지</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">상품명</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">카테고리</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">판매가</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">재고</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">상태</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">업데이트 날짜</th>
-                <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">관리</th>
+                {/* 1. ID */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[0] }}>
+                  <div className="truncate pr-2">ID</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 0)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 2. 이미지 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[1] }}>
+                  <div className="truncate pr-2">이미지</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 1)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 3. 상품명 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[2] }}>
+                  <div className="truncate pr-2">상품명</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 2)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 4. 카테고리 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[3] }}>
+                  <div className="truncate pr-2">카테고리</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 3)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 5. 판매가 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[4] }}>
+                  <div className="truncate pr-2">판매가</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 4)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 6. 재고 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[5] }}>
+                  <div className="truncate pr-2">재고</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 5)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 7. 상태 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[6] }}>
+                  <div className="truncate pr-2">상태</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 6)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 8. 업데이트 날짜 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider select-none" style={{ width: colWidths[7] }}>
+                  <div className="truncate pr-2">업데이트 날짜</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 7)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
+                {/* 9. 관리 */}
+                <th className="relative px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right select-none" style={{ width: colWidths[8] }}>
+                  <div className="truncate pl-2">관리</div>
+                  <div
+                    onMouseDown={(e) => startResize(e, 8)}
+                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500 z-10"
+                  />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -1540,34 +1737,52 @@ export default function ProductsTab() {
               ) : (
                 paged.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-5 py-3 text-sm text-slate-500">#{p.id}</td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 text-sm text-slate-500 truncate" title={`#${p.id}`}>#{p.id}</td>
+                    <td className="px-5 py-3 overflow-hidden">
                       {p.ai_fitting_image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={p.ai_fitting_image_url}
                           alt={p.kr_name}
-                          className="w-10 h-10 object-cover rounded-lg border border-slate-700"
+                          className="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0 cursor-zoom-in"
+                          onMouseEnter={(e) => handleThumbnailMouseEnter(p.ai_fitting_image_url!, e)}
+                          onMouseLeave={handleThumbnailMouseLeave}
+                        />
+                      ) : p.images && p.images.length > 0 ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.images[0]}
+                          alt={p.kr_name}
+                          className="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0 cursor-zoom-in"
+                          onMouseEnter={(e) => handleThumbnailMouseEnter(p.images![0], e)}
+                          onMouseLeave={handleThumbnailMouseLeave}
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
+                        <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 shrink-0">
                           <Package size={16} />
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3 font-semibold text-slate-200">{p.kr_name}</td>
-                    <td className="px-5 py-3 text-slate-400">{p.category_name || "미지정"}</td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 font-semibold text-slate-200 overflow-hidden">
+                      <div className="truncate text-sm" title={p.kr_name}>{p.kr_name}</div>
+                      {p.brand_name && (
+                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 mt-1 inline-block truncate max-w-full" title={p.brand_name}>
+                          {p.brand_name}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-slate-400 truncate text-sm" title={p.category_name || "미지정"}>{p.category_name || "미지정"}</td>
+                    <td className="px-5 py-3 overflow-hidden">
                       {editingId === p.id ? (
                         <input
                           type="number"
                           value={editPrice}
                           onChange={(e) => setEditPrice(e.target.value)}
-                          className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
                         />
                       ) : (
                         <div 
-                          className="cursor-pointer hover:text-blue-400 transition"
+                          className="cursor-pointer hover:text-blue-400 transition truncate"
                           onClick={() => {
                             setEditingId(p.id);
                             setEditPrice(String(p.sale_price || p.base_price));
@@ -1577,26 +1792,26 @@ export default function ProductsTab() {
                         >
                           {p.sale_price ? (
                             <>
-                              <div className="text-emerald-400 font-bold text-sm">₩{p.sale_price.toLocaleString()}</div>
-                              <div className="text-slate-500 text-[10px] line-through">₩{p.base_price.toLocaleString()}</div>
+                              <div className="text-emerald-400 font-bold text-sm truncate">₩{p.sale_price.toLocaleString()}</div>
+                              <div className="text-slate-500 text-[10px] line-through truncate">₩{p.base_price.toLocaleString()}</div>
                             </>
                           ) : (
-                            <div className="text-slate-200 font-bold text-sm">₩{p.base_price.toLocaleString()}</div>
+                            <div className="text-slate-200 font-bold text-sm truncate">₩{p.base_price.toLocaleString()}</div>
                           )}
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 overflow-hidden">
                       {editingId === p.id ? (
                         <input
                           type="number"
                           value={editStock}
                           onChange={(e) => setEditStock(e.target.value)}
-                          className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
                         />
                       ) : (
                         <span 
-                          className={`text-sm font-medium cursor-pointer hover:text-blue-400 transition ${
+                          className={`text-sm font-medium cursor-pointer hover:text-blue-400 transition truncate block ${
                             p.stock_quantity <= 0 ? "text-red-400 font-bold" : "text-slate-350"
                           }`}
                           onClick={() => {
@@ -1610,22 +1825,22 @@ export default function ProductsTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3">{statusBadge(p.status)}</td>
-                    <td className="px-5 py-3 text-slate-400 text-xs font-mono">{formatDate(p.created_at)}</td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-5 py-3 truncate">{statusBadge(p.status)}</td>
+                    <td className="px-5 py-3 text-slate-400 text-xs font-mono truncate" title={formatDate(p.created_at)}>{formatDate(p.created_at)}</td>
+                    <td className="px-5 py-3 text-right overflow-hidden">
+                      <div className="flex items-center justify-end gap-2 shrink-0">
                         {editingId === p.id ? (
                           <>
                             <button
                               onClick={() => saveEdit(p.id)}
-                              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition"
+                              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shrink-0"
                               title="저장"
                             >
                               <Check size={14} />
                             </button>
                             <button
                               onClick={cancelEdit}
-                              className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition"
+                              className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition shrink-0"
                               title="취소"
                             >
                               <X size={14} />
@@ -1635,14 +1850,14 @@ export default function ProductsTab() {
                           <>
                             <button
                               onClick={() => startEdit(p)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white transition"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white transition shrink-0"
                               title="수정"
                             >
                               <Edit3 size={14} />
                             </button>
                             <button
                               onClick={() => handleDelete(p.id, p.kr_name)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 transition"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 transition shrink-0"
                               title="삭제"
                             >
                               <Trash2 size={14} />
@@ -1993,6 +2208,23 @@ export default function ProductsTab() {
                     </select>
                   </div>
 
+                  {/* 브랜드 선택 */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">수입 브랜드 (선택)</label>
+                    <select
+                      value={createForm.brand_id || ""}
+                      onChange={e => setCreateForm(f => ({ ...f, brand_id: e.target.value }))}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                    >
+                      <option value="">브랜드 없음 / 미지정</option>
+                      {adminBrands.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.eng_name})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* 카테고리별 상세 재고 규격화 매트릭스 UI */}
                   <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
                     <div className="flex items-center justify-between border-b border-slate-850 pb-2">
@@ -2071,16 +2303,71 @@ export default function ProductsTab() {
                     onImagesChange={(imgs) => setCreateForm(f => ({ ...f, images: imgs }))}
                     mainImageUrl={createForm.ai_fitting_image_url}
                     onMainImageUrlChange={(url) => setCreateForm(f => ({ ...f, ai_fitting_image_url: url }))}
+                    isSelectingForVton={isSelectingForVton}
+                    selectedImageForVton={selectedImageForVton}
+                    onSelectImageForVton={(url) => {
+                      setSelectedImageForVton(url);
+                      setIsSelectingForVton(false);
+                    }}
                   />
 
                   {/* VTON 피팅용 누끼 이미지 (PNG 권장) */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <label className="block text-sm font-semibold text-slate-300">
                         <Cpu size={14} className="inline mr-1.5 -mt-0.5 text-purple-400" />
                         가상 피팅(VTON) 누끼 이미지 <span className="text-slate-500 font-normal">(PNG 권장)</span>
                         <span className="text-[10px] text-purple-400 block mt-0.5 font-normal">* 배경이 투명하게 제거된 이미지를 업로드해야 가상 피팅이 정상 작동합니다.</span>
                       </label>
+                      
+                      {/* 상품 이미지에서 선택 및 누끼 실행 버튼 제어 */}
+                      <div className="shrink-0 flex gap-2">
+                        {isSelectingForVton ? (
+                          <button
+                            type="button"
+                            onClick={() => { setIsSelectingForVton(false); setSelectedImageForVton(null); }}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                          >
+                            <X size={12} /> 선택 취소
+                          </button>
+                        ) : selectedImageForVton ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setIsSelectingForVton(true)}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                            >
+                              다시 선택
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleVtonImageExtract}
+                              disabled={vtonExtractLoading}
+                              className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-purple-950/20 disabled:opacity-40"
+                            >
+                              {vtonExtractLoading ? (
+                                <>
+                                  <Loader2 size={12} className="animate-spin" />
+                                  가공 중...
+                                </>
+                              ) : (
+                                <>
+                                  <Cpu size={12} />
+                                  누끼이미지 만들기 시작
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsSelectingForVton(true)}
+                            className="bg-purple-650/15 hover:bg-purple-650/30 text-purple-300 hover:text-white border border-purple-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                          >
+                            <Plus size={12} /> 상품 이미지에서 선택하기
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* VTON 업로드 영역 */}
@@ -2302,6 +2589,30 @@ export default function ProductsTab() {
           </div>
         </div>
       )}
+
+      {/* 이미지 마우스 호버 실시간 미리보기 팝업 */}
+      <div
+        className={`fixed z-50 pointer-events-none rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl p-1`}
+        style={{
+          top: preview ? `${preview.y}px` : "0px",
+          left: preview ? `${preview.x}px` : "0px",
+          width: "300px",
+          height: "300px",
+          opacity: preview ? 1 : 0,
+          transform: preview ? "scale(1)" : "scale(0.95)",
+          transition: "opacity 0.15s ease-out, transform 0.15s ease-out",
+          visibility: preview ? "visible" : "hidden",
+        }}
+      >
+        {activeUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={activeUrl}
+            alt="미리보기"
+            className="w-full h-full object-cover rounded-lg"
+          />
+        )}
+      </div>
     </div>
   );
 }

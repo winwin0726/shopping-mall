@@ -93,6 +93,24 @@ def get_user_me(
     return current_user
 
 
+@router.get("/me/coupons")
+def get_my_coupons(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Any:
+    """현재 로그인 사용자의 사용 가능한(미사용) 쿠폰 목록. 체크아웃에서 선택용."""
+    coupons = (
+        db.query(Coupon)
+        .filter(Coupon.user_id == current_user.id, Coupon.is_used == False)
+        .order_by(Coupon.id.desc())
+        .all()
+    )
+    return [
+        {"id": c.id, "code": c.code, "name": c.name, "discount_amount": c.discount_amount}
+        for c in coupons
+    ]
+
+
 @router.post("/me/visit-reward")
 def claim_visit_reward(
     current_user: User = Depends(get_current_user),

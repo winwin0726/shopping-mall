@@ -21,7 +21,7 @@ import DesignTab from "@/components/admin/DesignTab";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("pipeline");
   const [tenant, setTenant] = useState<any>(null);
   const [adminEmail, setAdminEmail] = useState("");
   const [authState, setAuthState] = useState<"checking" | "authorized" | "denied">("checking");
@@ -117,8 +117,8 @@ export default function AdminDashboard() {
           </h1>
         </div>
         <nav className="py-4 space-y-1 flex-1 overflow-y-auto">
-          <SidebarItem icon={<BarChart3 />} label="대시보드" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
           <SidebarItem icon={<Box />} label="AI 자동화 파이프라인" active={activeTab === "pipeline"} onClick={() => setActiveTab("pipeline")} />
+          <SidebarItem icon={<BarChart3 />} label="대시보드" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
           <SidebarItem icon={<Tags />} label="카테고리 관리" active={activeTab === "categories"} onClick={() => setActiveTab("categories")} />
           <SidebarItem icon={<Package />} label="상품 관리" active={activeTab === "products"} onClick={() => setActiveTab("products")} />
           <SidebarItem icon={<UserCog />} label="회원 관리" active={activeTab === "users"} onClick={() => setActiveTab("users")} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { 
   MessageSquare, X, Send, Clock, CheckCircle2, Loader2, LogIn, HelpCircle, ArrowRight
 } from "lucide-react";
@@ -20,7 +21,7 @@ interface Ticket {
 }
 
 export default function SupportWidget() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+  const apiUrl = API_URL;
   const { user } = useAuth();
   const { themeConfig, tenantName } = useTheme();
   

@@ -11,10 +11,11 @@ from backend.crawler.engine import CrawlerEngine
 from backend.crawler.ai_translator import AITranslatorPipeline
 from backend.ai_engine.vton import AIFittingPreGenerator
 from backend.database import SessionLocal, get_db
-from backend.models import HQProduct, Category, Tenant, User
+from backend.models import HQProduct, Category, Tenant, User, Brand
 from backend.config import settings
 from backend.utils.deps import get_current_admin
 from backend.utils.gemini import generate_text, GeminiError
+from backend.utils.brand_detector import detect_brand_id
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -473,9 +474,13 @@ async def crawler_webhook(
     cat_name = cat.name if cat else ""
     parsed_sizes = extract_sizes_from_text(f"{kr_name} {kr_desc}", cat_name)
 
+    # 7-2) 브랜드 판별
+    detected_brand_id = detect_brand_id(db, kr_name, kr_desc, cat_name)
+
     # 8) 상품 등록
     new_prod = HQProduct(
         category_id=category_id,
+        brand_id=detected_brand_id,
         original_source_url=source_url,
         cn_name=raw_title or kr_name,
         kr_name=kr_name,
@@ -526,7 +531,9 @@ async def background_scrape_task(
         for url in urls:
             raw_data = await crawler_engine.scrape_album(url)
             
-            for item in raw_data:
+            # [수집 순서 개선] 위챗 앨범은 최신 수집물이 리스트 전면에 오므로,
+            # 과거 수집 상품부터 역순(reversed)으로 DB에 저장해야 최신 등록 상품이 쇼핑몰 최상단에 뜨게 됩니다.
+            for item in reversed(raw_data):
                 image_url = item.get('image_url', '')
                 if not image_url:
                     continue
@@ -561,8 +568,12 @@ async def background_scrape_task(
                     original_image_url=image_url
                 )
                 
+                # 브랜드 판별
+                detected_brand_id = detect_brand_id(db, kr_name, kr_desc, category_name)
+
                 new_prod = HQProduct(
                     category_id=category_id,
+                    brand_id=detected_brand_id,
                     original_source_url=url,
                     cn_name=item.get('title', ''),
                     kr_name=kr_name[:50], # 50자 제한
@@ -665,14 +676,35 @@ async def scrape_direct_product(payload: ScrapeDirectRequest, db: Session = Depe
         cat = db.query(Category).filter(Category.id == mapped.get("category_id", 1)).first()
         category_name = cat.name if cat else "미분류"
         
+        # 브랜드 검출
+        detected_brand_id = detect_brand_id(
+            db, 
+            mapped.get("kr_name", target_item.get("title", "")), 
+            mapped.get("kr_description", target_item.get("desc", "")),
+            category_name
+        )
+        brand_name = "미지정"
+        brand_eng_name = ""
+        if detected_brand_id:
+            brand_obj = db.query(Brand).filter(Brand.id == detected_brand_id).first()
+            if brand_obj:
+                brand_name = brand_obj.name
+                brand_eng_name = brand_obj.eng_name
+        
         # 사이즈 검출
         title_text = target_item.get("title", "")
         desc_text = mapped.get("kr_description", "")
         parsed_sizes = extract_sizes_from_text(f"{title_text} {desc_text}", category_name)
         
+        # mapped_data 에도 brand_id 정보 주입
+        mapped_brand = dict(mapped)
+        mapped_brand["brand_id"] = detected_brand_id
+        mapped_brand["brand_name"] = brand_name
+        mapped_brand["brand_eng_name"] = brand_eng_name
+        
         return {
             "status": "success",
-            "mapped_data": mapped,
+            "mapped_data": mapped_brand,
             "calculated_price": base_price,
             "category_name": category_name,
             "parsed_sizes": parsed_sizes,
@@ -680,12 +712,32 @@ async def scrape_direct_product(payload: ScrapeDirectRequest, db: Session = Depe
         }
     except Exception as e:
         logger.error(f"Real-time AI Mapping error: {str(e)}")
+        # 폴백 매핑 시에도 브랜드 판별 시도
+        cat_fb = db.query(Category).filter(Category.id == payload.category_id).first()
+        fallback_cat_name = cat_fb.name if cat_fb else "미분류"
+        detected_brand_id = detect_brand_id(
+            db, 
+            target_item.get("title", ""), 
+            target_item.get("desc", ""),
+            fallback_cat_name
+        )
+        brand_name = "미지정"
+        brand_eng_name = ""
+        if detected_brand_id:
+            brand_obj = db.query(Brand).filter(Brand.id == detected_brand_id).first()
+            if brand_obj:
+                brand_name = brand_obj.name
+                brand_eng_name = brand_obj.eng_name
+                
         return {
             "status": "success",
             "mapped_data": {
                 "kr_name": target_item.get("title", "수집 상품"),
                 "kr_description": target_item.get("desc", "설명"),
                 "category_id": payload.category_id,
+                "brand_id": detected_brand_id,
+                "brand_name": brand_name,
+                "brand_eng_name": brand_eng_name,
                 "images": [target_item.get("image_url")],
                 "video_url": None
             },

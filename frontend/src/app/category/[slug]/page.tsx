@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { API_URL } from "@/lib/api";
 import { useParams } from "next/navigation";
 import ProductList, { Product } from "@/components/ProductList";
 import { useEffect, useState, useRef } from "react";
@@ -109,6 +110,10 @@ export default function CategoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 브랜드 교차 필터 상태 정의
+  const [selectedBrand, setSelectedBrand] = useState("전체");
+  const [availableBrands, setAvailableBrands] = useState<{ id: number | null; name: string }[]>([]);
+
   const isFirstRender = useRef(true);
 
   // 클라이언트 마운트 시 URL 쿼리 파라미터 파싱 및 필터 세팅
@@ -163,7 +168,7 @@ export default function CategoryPage() {
         }
 
         const queryParam = subCategoryVal ? `?sub_category=${encodeURIComponent(subCategoryVal)}` : "";
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+        const apiUrl = API_URL;
         const res = await fetch(`${apiUrl}/api/products/category/${encodeURIComponent(decodeSlug)}${queryParam}`);
         if (res.ok) {
           setProducts(await res.json());
@@ -176,6 +181,44 @@ export default function CategoryPage() {
     }
     fetchCategoryItems();
   }, [decodeSlug, activeSub, activeDetailSlug]);
+
+  // 해당 카테고리에 할당된 모든 공식 브랜드 가져오기
+  const [activeBrandNames, setActiveBrandNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    async function fetchCategoryBrands() {
+      try {
+        const res = await fetch(`${API_URL}/api/products/brands?category_name=${encodeURIComponent(decodeSlug)}`);
+        if (res.ok) {
+          const brandData = await res.json();
+          // "전체" 필터 칩 추가
+          const brandList = [{ id: null, name: "전체" }, ...brandData];
+          setAvailableBrands(brandList);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch brands for category page", error);
+      }
+    }
+    if (decodeSlug) {
+      fetchCategoryBrands();
+    }
+  }, [decodeSlug]);
+
+  // 현재 상품 데이터에 존재하는 브랜드 이름 목록 (필터 칩 활성/비활성 제어용)
+  useEffect(() => {
+    const names = new Set<string>();
+    products.forEach((p: any) => {
+      if (p.brand_name) {
+        names.add(p.brand_name);
+      }
+    });
+    setActiveBrandNames(names);
+    setSelectedBrand("전체");
+  }, [products]);
+
+  const displayedProducts = selectedBrand === "전체"
+    ? products
+    : products.filter((p: any) => p.brand_name === selectedBrand);
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${theme.bg} transition-colors duration-700`}>
@@ -249,12 +292,48 @@ export default function CategoryPage() {
               ))}
             </motion.div>
           )}
+          {/* 브랜드별 교차 필터 칩 */}
+          {availableBrands.length > 2 && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-wrap items-center justify-center gap-1.5 p-1.5 bg-slate-100/30 dark:bg-slate-900/10 rounded-xl border border-slate-200/30 dark:border-slate-800/30 backdrop-blur-sm mt-1"
+            >
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 px-2 select-none">브랜드 필터</span>
+              {availableBrands.map(br => {
+                const isAll = br.name === "전체";
+                const hasProducts = isAll || activeBrandNames.has(br.name);
+                
+                return (
+                  <button
+                    key={br.name}
+                    onClick={() => {
+                      if (!hasProducts) {
+                        alert(`현재 '${br.name}' 브랜드의 수입 상품은 해외 배송 또는 통관 준비 중입니다. 신속하게 입고하도록 하겠습니다!`);
+                        return;
+                      }
+                      setSelectedBrand(br.name);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      selectedBrand === br.name
+                        ? 'bg-blue-600 text-white shadow-sm transform scale-105'
+                        : hasProducts
+                          ? 'text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
+                          : 'text-slate-400 dark:text-slate-600 opacity-40 cursor-not-allowed'
+                    }`}
+                  >
+                    {br.name}
+                  </button>
+                );
+              })}
+            </motion.div>
+          )}
         </div>
 
         <div className="glass-panel p-8 rounded-3xl border border-white/20 shadow-2xl bg-white/40 dark:bg-slate-900/40">
            <div className="flex justify-between items-end border-b border-slate-300 dark:border-slate-700 pb-4 mb-8">
               <h2 className="text-2xl font-bold dark:text-white">추천 상품 & 베스트 아이템</h2>
-              <span className="text-sm font-semibold text-slate-500">{products.length}개의 상품</span>
+              <span className="text-sm font-semibold text-slate-500">{displayedProducts.length}개의 상품</span>
            </div>
            
            {loading ? (
@@ -262,8 +341,8 @@ export default function CategoryPage() {
                <Loader2 size={48} className="animate-spin mb-4" />
                <p className="font-semibold">AI 상품 데이터를 불러오는 중입니다...</p>
              </div>
-           ) : products.length > 0 ? (
-             <ProductList products={products} linkToDetail={true} selectedIds={[]} />
+           ) : displayedProducts.length > 0 ? (
+             <ProductList products={displayedProducts} linkToDetail={true} selectedIds={[]} />
            ) : (
              <div className="text-center py-20 text-slate-500">
                <span className="text-4xl mb-4 block">😕</span>

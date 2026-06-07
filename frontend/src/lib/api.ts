@@ -1,9 +1,11 @@
 // 백엔드 API 호출 공용 유틸 (단일 소스)
-// - API_URL: 환경변수 우선, 폴백은 실제 백엔드 포트(8002)로 통일
+// - API_URL: 환경변수 우선, 폴백은 "" (상대경로). next.config 의 rewrites 가
+//   /api·/uploads 를 백엔드(8002)로 프록시하므로 같은 출처로 동작(로컬/배포/터널 공통).
+//   별도 백엔드 도메인을 쓰려면 NEXT_PUBLIC_API_URL 에 절대 URL 지정.
 // - authFetch: localStorage의 JWT를 Authorization 헤더로 자동 주입
 
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
+  process.env.NEXT_PUBLIC_API_URL || "";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

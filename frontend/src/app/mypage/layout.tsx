@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
+import { API_URL } from "@/lib/api";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -72,7 +73,7 @@ export default function MyPageLayout({ children }: { children: React.ReactNode }
               <div className="flex items-center space-x-4 mb-6">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex flex-col items-center justify-center text-white text-xl font-bold shadow-md overflow-hidden ring-2 ring-white dark:ring-slate-800">
                   {user.profile_image ? (
-                    <img src={user.profile_image.startsWith('http') ? user.profile_image : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${user.profile_image}`} alt="프로필" className="w-full h-full object-cover" />
+                    <img src={user.profile_image.startsWith('http') ? user.profile_image : `${API_URL}${user.profile_image}`} alt="프로필" className="w-full h-full object-cover" />
                   ) : (
                     user.name.charAt(0)
                   )}

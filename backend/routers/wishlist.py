@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from backend.database import get_db
@@ -12,12 +12,18 @@ router = APIRouter()
 @router.get("/me", response_model=List[WishlistItemResponse])
 def get_my_wishlist(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """ Get the wishlist items for the current user """
-    items = db.query(WishlistItem).filter(WishlistItem.user_id == current_user.id).order_by(WishlistItem.id.desc()).all()
-    
+    items = (
+        db.query(WishlistItem)
+        .options(joinedload(WishlistItem.product))
+        .filter(WishlistItem.user_id == current_user.id)
+        .order_by(WishlistItem.id.desc())
+        .all()
+    )
+
     result = []
     for item in items:
-        # Load associated product
-        product = db.query(HQProduct).filter(HQProduct.id == item.product_id).first()
+        # Load associated product (eager-loaded — N+1 제거, F1)
+        product = item.product
         result.append({
             "id": item.id,
             "product_id": item.product_id,

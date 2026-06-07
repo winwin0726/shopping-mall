@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { Plus, MapPin, Edit, Trash2, Loader2, Home, Search, X } from "lucide-react";
 import DaumPostcode from 'react-daum-postcode';
 
@@ -15,7 +16,7 @@ interface Address {
 }
 
 export default function AddressesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);

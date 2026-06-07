@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { Loader2, Heart } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,7 +15,7 @@ interface WishlistItem {
 }
 
 export default function WishlistPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 

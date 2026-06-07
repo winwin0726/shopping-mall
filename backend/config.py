@@ -12,9 +12,8 @@ _default_sqlite = "sqlite:///" + os.path.join(os.path.dirname(base_dir), "sql_ap
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI E-Commerce Platform API"
     DATABASE_URL: str = _default_sqlite
-    SECRET_KEY: str = "your_super_secret_key_change_in_production"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # JWT 설정(SECRET_KEY/ALGORITHM/만료)의 단일 소스는 backend/utils/security.py.
+    # (과거 여기 중복 정의가 있었으나 미사용 + 값 충돌(60분 vs 7일)로 제거 — A5)
     GEMINI_API_KEY: Optional[str] = None
     BACKEND_URL: str = "http://localhost:8002"
     # 결제 개발 모드: True 면 실제 PG 검증 없이 결제 성공 처리(로컬 데모용). 운영에서는 반드시 False.

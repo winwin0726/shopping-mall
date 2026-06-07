@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ShoppingBag, Loader2, CheckCircle2, RotateCcw, Layers, Sliders, User, Info } from "lucide-react";
 import Image from "next/image";
@@ -129,7 +130,7 @@ export default function SmartFittingStudio() {
       }
       
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+        const apiUrl = API_URL;
         const res = await fetch(`${apiUrl}/api/cart/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -182,7 +183,7 @@ export default function SmartFittingStudio() {
     setRenderMessage(`입력하신 신체 조건(키: ${height}cm, 몸무게: ${weight}kg)에 맞춰 AI가 의류 핏을 분석 중입니다...`);
     
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/vton/smart-fit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -277,7 +278,7 @@ export default function SmartFittingStudio() {
     setRenderMessage(`AI가 '${product.name}' 구조 분석 및 마네킹 핏 합성 중입니다 (Outfitting Fusion)...`);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/vton/smart-layering`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -335,7 +336,7 @@ export default function SmartFittingStudio() {
     
     try {
         const promises = [];
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+        const apiUrl = API_URL;
         if (selectedTop) {
             promises.push(fetch(`${apiUrl}/api/cart/items`, {
                 method: "POST",

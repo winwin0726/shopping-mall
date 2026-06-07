@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from backend.database import get_db
-from backend.models import User, Review, HQProduct
+from backend.models import User, Review, HQProduct, Order, OrderItem
 from backend.schemas import ReviewCreate, ReviewResponse
 from backend.utils.deps import get_current_user
 
@@ -23,6 +23,24 @@ def create_review(
     product = db.query(HQProduct).filter(HQProduct.id == payload.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    # E2: 같은 상품 중복 리뷰 방지 (1인 1상품 1리뷰)
+    dup = db.query(Review).filter(
+        Review.user_id == current_user.id,
+        Review.product_id == payload.product_id,
+    ).first()
+    if dup:
+        raise HTTPException(status_code=400, detail="이미 이 상품에 리뷰를 작성하셨습니다.")
+
+    # E2: 구매 이력이 있는 상품만 리뷰 허용
+    purchased = (
+        db.query(OrderItem)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(Order.user_id == current_user.id, OrderItem.product_id == payload.product_id)
+        .first()
+    )
+    if not purchased:
+        raise HTTPException(status_code=403, detail="구매한 상품에만 리뷰를 작성할 수 있습니다.")
 
     new_review = Review(
         user_id=current_user.id,
@@ -46,6 +64,34 @@ def create_review(
     )
 
 
+@router.get("/product/{product_id}")
+def get_product_reviews(product_id: int, db: Session = Depends(get_db)):
+    """상품별 공개 리뷰 목록 + 평점 요약 (비로그인도 조회 가능). 작성자명은 마스킹."""
+    reviews = (
+        db.query(Review)
+        .options(joinedload(Review.user))
+        .filter(Review.product_id == product_id)
+        .order_by(Review.id.desc())
+        .all()
+    )
+    items = []
+    total = 0
+    for r in reviews:
+        total += r.rating or 0
+        name = (r.user.name if r.user else None) or "익명"
+        masked = name[0] + ("*" * (len(name) - 1)) if len(name) > 1 else name
+        items.append({
+            "id": r.id,
+            "rating": r.rating,
+            "content": r.content,
+            "user_name": masked,
+            "created_at": str(r.created_at) if r.created_at else None,
+        })
+    count = len(items)
+    average = round(total / count, 1) if count else 0
+    return {"count": count, "average": average, "items": items}
+
+
 @router.get("/me", response_model=List[ReviewResponse])
 def get_my_reviews(
     db: Session = Depends(get_db),
@@ -54,6 +100,7 @@ def get_my_reviews(
     """내가 작성한 리뷰 전체 조회"""
     reviews = (
         db.query(Review)
+        .options(joinedload(Review.product))
         .filter(Review.user_id == current_user.id)
         .order_by(Review.id.desc())
         .all()
@@ -61,7 +108,7 @@ def get_my_reviews(
 
     result = []
     for r in reviews:
-        product = db.query(HQProduct).filter(HQProduct.id == r.product_id).first()
+        product = r.product
         result.append(
             ReviewResponse(
                 id=r.id,

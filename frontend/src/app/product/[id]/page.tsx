@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import DOMPurify from "isomorphic-dompurify";
 import {
   ArrowLeft,
   ShoppingBag,
@@ -74,6 +76,7 @@ export default function ProductDetailPage() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [showFitting, setShowFitting] = useState(false);
+  const [reviews, setReviews] = useState<{ count: number; average: number; items: any[] }>({ count: 0, average: 0, items: [] });
 
   // 미승인 회원(5등급) 및 비로그인 게스트 마스킹 처리 룰
   const isMasked = user === null || user.grade === 5;
@@ -83,7 +86,7 @@ export default function ProductDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const apiUrl = API_URL;
         const res = await fetch(
           `${apiUrl}/api/products/${productId}`
         );
@@ -103,6 +106,15 @@ export default function ProductDetailPage() {
     if (productId) fetchProduct();
   }, [productId]);
 
+  // E1: 상품 후기 조회 (공개 — 비로그인도 볼 수 있음)
+  useEffect(() => {
+    if (!productId) return;
+    fetch(`${API_URL}/api/reviews/product/${productId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setReviews(d); })
+      .catch(() => {});
+  }, [productId]);
+
   // 장바구니 담기
   const handleAddToCart = async () => {
     if (isMasked) {
@@ -119,7 +131,7 @@ export default function ProductDetailPage() {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/cart/items`, {
         method: "POST",
         headers: {
@@ -135,7 +147,9 @@ export default function ProductDetailPage() {
         setAddedToCart(true);
         setTimeout(() => setAddedToCart(false), 2000);
       } else {
-        alert("장바구니 담기에 실패했습니다.");
+        // H3: 서버 메시지(재고 부족 등) 그대로 표시
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "장바구니 담기에 실패했습니다.");
       }
     } catch (err) {
       console.error(err);
@@ -158,7 +172,7 @@ export default function ProductDetailPage() {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/wishlist/toggle`, {
         method: "POST",
         headers: {
@@ -590,7 +604,7 @@ export default function ProductDetailPage() {
                       prose-img:rounded-xl prose-img:shadow-lg
                       prose-headings:font-bold prose-a:text-blue-600"
                     dangerouslySetInnerHTML={{
-                      __html: product.description_html,
+                      __html: DOMPurify.sanitize(product.description_html),
                     }}
                   />
                 ) : (
@@ -616,6 +630,50 @@ export default function ProductDetailPage() {
                   </div>
                 )}
               </div>
+            </motion.section>
+
+            {/* 상품 후기 (E1) */}
+            <motion.section
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-16"
+            >
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                <Star size={22} className="text-amber-500" />
+                상품 후기
+                {reviews.count > 0 && (
+                  <span className="text-base font-semibold text-slate-500">
+                    ⭐ {reviews.average} · {reviews.count}개
+                  </span>
+                )}
+              </h2>
+              {reviews.items.length === 0 ? (
+                <div className="glass-panel rounded-3xl border border-white/40 shadow p-8 text-center text-slate-500">
+                  아직 등록된 후기가 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.items.map((rv) => (
+                    <div key={rv.id} className="glass-panel rounded-2xl border border-white/40 shadow p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 dark:text-white">{rv.user_name}</span>
+                          <span className="text-amber-500 text-sm">
+                            {"★".repeat(rv.rating)}{"☆".repeat(5 - rv.rating)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-400">{rv.created_at?.slice(0, 10)}</span>
+                      </div>
+                      {rv.content && (
+                        <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                          {rv.content}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.section>
 
             {/* 관련 상품 */}

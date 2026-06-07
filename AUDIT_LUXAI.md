@@ -60,10 +60,16 @@
 - [x] throwaway 스크립트(`tmp_*.py`) + 빈 DB 정리
 - [x] 비밀키 **부분 env화**: `JWT_SECRET_KEY`, `SEED_ADMIN_PASSWORD` 환경변수 오버라이드(기본값 유지)
 
+### ✅ 3차 개선 (이번 세션 반영 · 스모크 10/10 + 프론트 tsc 0에러)
+- [x] **`requirements.txt` 완성(설치 가능화)** — 실제 코드가 쓰는데 누락됐던 `httpx`,`Pillow`,`beautifulsoup4`,`selenium`,`webdriver-manager`,`email-validator` 추가, 잘못된 `cors` 제거. 누끼(`rembg`/`onnxruntime`)는 lazy 로딩이라 주석 안내. → 신규 venv 설치 후 백엔드 부팅·로그인·상품·인증 스모크 확인.
+- [x] **쿠폰 사용 / 적립금 차감을 체크아웃에 반영** — `GET /api/auth/me/coupons`(내 쿠폰 목록) 신설, `orders.checkout/cart`·`orders`에 `coupon_id`·`used_points` 처리(서버측 **소유/미사용/잔액 검증** → 할인 적용 → 쿠폰 사용처리 + 적립금 차감). `Order`에 `discount_amount`/`used_points` 컬럼 + PRAGMA 폴백 마이그레이션. `CheckoutModal`에 쿠폰 선택·적립금 입력 UI + 할인내역/최종금액 표시. (`orders.py`,`auth.py`,`schemas.py`,`models.py`,`main.py`,`CheckoutModal.tsx`)
+- [x] **게스트 허용 인증 의존성** `get_current_user_optional` 추가 — 비로그인 buy-now는 유지하되, 로그인 시 쿠폰/적립금 사용 + 주문 소유자를 토큰 기준으로 안전 매핑. (`utils/deps.py`)
+- [x] **데이터 버그픽스** — `hq_products` id=23 의 `created_at='2026-06-02T12:00:00Z'`(ISO `Z` 접미사)가 Python 3.10 SQLAlchemy 파싱 실패를 일으켜 **어드민 상품 API·해당 상품 체크아웃을 500 크래시**시키던 문제. DB datetime 값 정규화로 해결(코드 삽입 경로 없음 = 데모데이터 1건).
+
 ### 🔴 남은 치명 (외부 키/제품 결정 필요)
 - [ ] **실제 PortOne 결제 연동** + 프론트 `payment/verify` 호출(현재는 `PAYMENTS_DEV_MODE=True`로 데모 통과) — PG 계정·키 필요
 - [ ] **비밀키 실제 로테이션·분리**: 노출된 `backend/.env`(Gemini), `NEXTAUTH_SECRET`, 루트 `auth_state.json` — 사용자 직접 조치
-- [ ] 쿠폰 사용/적립금 차감을 체크아웃에 반영 — API/UI 제품 결정 필요
+- [x] ~~쿠폰 사용/적립금 차감을 체크아웃에 반영~~ → **3차 개선에서 완료**(위 참조)
 - [ ] 크롤러 카카오/밴드 비밀번호 평문 저장 암호화 — winwin 연계
 
 ### 🟠 남은 주요 (구조 변경)

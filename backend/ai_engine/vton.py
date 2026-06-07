@@ -8,6 +8,7 @@ from typing import Optional, List, Dict
 import json
 import uuid
 from PIL import Image
+from backend.config import settings
 
 # rembg 모델 영구 유지용 환경 변수 설정 (서버 리스타트 시 모델 유실 방지)
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,82 +34,15 @@ def _cache_put(key: str, value: dict) -> None:
 
 
 class AIFittingPreGenerator:
+    """Local rembg CLI background-removal pre-generator.
+    (Unused external AI-worker VTON / Hailuo video mock methods were removed - C4)
     """
-    Handles background generation of AI Virtual Try-On (VTON) images
-    and 5-Scene Hailuo Video Rendering.
-    """
-    def __init__(self):
-        self.vton_endpoint = os.getenv("VTON_API_ENDPOINT", "http://ai-worker:8080/v1/generate")
-        self.rembg_endpoint = os.getenv("REMBG_API_ENDPOINT", "http://ai-worker:8080/v1/remove-bg")
-        self.hailuo_video_endpoint = os.getenv("HAILUO_API_ENDPOINT", "http://ai-worker:8080/v1/video/hailuo-5scene")
-        
-    async def pre_generate_fitting(
-        self, 
-        hq_product_id: int, 
-        original_image_url: str, 
-        category: str,
-        user_body_shape: Optional[Dict[str, any]] = None
-    ) -> Optional[str]:
-        """
-        Calls VTON API to fit the product, utilizing user_body_shape for Smart Fitting.
-        """
-        logger.info(f"Starting VTON pre-generation for Product ID: {hq_product_id} ({category})")
-        
-        model_type = "headless_asian_default"
-        
-        if user_body_shape:
-            model_type = "custom_scanned_avatar"
-            logger.info(f"Applying custom user body shape: {user_body_shape}")
 
-        payload = {
-            "cloth_image": original_image_url, 
-            "model_type": model_type,
-            "body_parameters": user_body_shape or {},
-            "detail_lock": True
-        }
-        
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(self.vton_endpoint, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                generated_url = data.get("result_url")
-                logger.info(f"VTON Pre-generation success. Url: {generated_url}")
-                return generated_url
-        except Exception as e:
-            logger.error(f"Failed to generate VTON for {hq_product_id}. Reason: {str(e)}")
-            return f"https://cdn.ai-mall.com/cache/vton/product_{hq_product_id}_fallback_fit.jpg"
-
-    async def generate_hailuo_5scene_video(self, hq_product_id: int, vton_image_url: str) -> Optional[List[Dict[str, str]]]:
-        """Hailuo-2.3 기반 5씬 자동화 렌더러 연동"""
-        logger.info(f"Triggering Hailuo-2.3 Video Pipeline for VTON image: {vton_image_url}")
-        
-        payload = {
-            "source_image": vton_image_url,
-            "scenes": ["orbit", "crane", "low-angle", "front", "back"],
-            "model_version": "hailuo-2.3",
-            " quality": "high-fidelity"
-        }
-        
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(self.hailuo_video_endpoint, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                video_results = data.get("videos", [])
-                logger.info(f"Successfully rendered 5-scene videos for {hq_product_id}")
-                return video_results
-        except Exception as e:
-            logger.error(f"Hailuo Pipeline failed: {str(e)}")
-            return None
-        
     async def extract_transparent_clothing(self, original_image_url: str) -> Optional[str]:
         """Removes background via Local rembg CLI subprocess to prevent asyncio deadlock."""
         logger.info(f"Extracting transparent item from (local rembg CLI): {original_image_url}")
         
         try:
-            import urllib.request
-            
             backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             temp_dir = os.path.join(backend_dir, "uploads", "temp")
             os.makedirs(temp_dir, exist_ok=True)
@@ -120,9 +54,11 @@ class AIFittingPreGenerator:
             file_id = uuid.uuid4().hex[:8]
             temp_input_path = os.path.join(temp_dir, f"in_{file_id}.png")
             
-            req = urllib.request.Request(original_image_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req) as response:
-                img_data = response.read()
+            # F2: 동기 urllib → 비동기 httpx (async 이벤트 루프 블로킹 제거)
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                resp = await client.get(original_image_url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                img_data = resp.content
             with open(temp_input_path, "wb") as f:
                 f.write(img_data)
                 
@@ -168,7 +104,7 @@ class AIFittingPreGenerator:
                 raise Exception(f"rembg CLI return code {returncode}. Error: {err_msg}")
                 
             # 프론트에서 접근할 수 있는 로컬 정적 경로 URL 지정
-            backend_url = os.getenv("BACKEND_URL", "http://localhost:8002")
+            backend_url = settings.BACKEND_URL
             result_url = f"{backend_url}/uploads/transparent/{file_name}"
             logger.info(f"rembg extraction success via CLI. Saved at: {result_url}")
             return result_url
@@ -261,7 +197,7 @@ async def smart_layering_vton(top_id: Optional[int] = None, bottom_id: Optional[
                 if orig_url:
                     # 상대 경로일 시 로컬 백엔드 주소 부착
                     if not orig_url.startswith("http"):
-                        backend_url = os.getenv("BACKEND_URL", "http://localhost:8002")
+                        backend_url = settings.BACKEND_URL
                         orig_url = f"{backend_url}{orig_url}"
                     
                     try:
@@ -433,7 +369,7 @@ async def smart_layering_vton(top_id: Optional[int] = None, bottom_id: Optional[
         base_img.save(save_path, "PNG")
         
         # FastAPI 정적 경로 서빙
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8002")
+        backend_url = settings.BACKEND_URL
         result_url = f"{backend_url}/uploads/vton/{filename}"
         
         # 캐시 저장

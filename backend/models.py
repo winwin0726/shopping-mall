@@ -49,11 +49,26 @@ class Category(Base):
     parent = relationship("Category", remote_side=[id], backref="children")
     products = relationship("HQProduct", back_populates="category")
 
+class Brand(Base):
+    __tablename__ = "brands"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)       # 한글명 (예: 루이비통)
+    eng_name = Column(String, nullable=False, index=True)   # 영문명 (예: Louis Vuitton)
+    slug = Column(String, unique=True, index=True, nullable=False) # URL 주소용 (예: louis-vuitton)
+    logo_url = Column(String, nullable=True)
+    is_premium = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    category_group = Column(String, default="all", nullable=True) # 품목 매핑용 카테고리 그룹 (예: 'all', 'shoes', 'watch', 'bag,wallet')
+    
+    products = relationship("HQProduct", back_populates="brand")
+
 class HQProduct(Base):
     __tablename__ = "hq_products"
     
     id = Column(Integer, primary_key=True, index=True)
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
+    brand_id = Column(Integer, ForeignKey('brands.id'), nullable=True)
     
     # Crawler data
     original_source_url = Column(String, nullable=True)
@@ -86,6 +101,7 @@ class HQProduct(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     category = relationship("Category", back_populates="products")
+    brand = relationship("Brand", back_populates="products")
     tenant_links = relationship("TenantProduct", back_populates="product")
 
 class TenantProduct(Base):

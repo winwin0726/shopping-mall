@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -209,7 +209,6 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         const formData = new FormData();
         formData.append("file", file);
         
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
         const res = await authFetch(`${API_URL}/api/admin/upload/`, {
           method: "POST",
           body: formData,

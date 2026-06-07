@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,7 @@ export default function CartPage() {
       return;
     }
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/cart/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -56,13 +57,19 @@ export default function CartPage() {
       setItems(prev => prev.map(i => i.id === itemId ? {...i, quantity: newQuantity} : i));
       
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       try {
-        await fetch(`${apiUrl}/api/cart/items/${itemId}`, {
+        const res = await fetch(`${apiUrl}/api/cart/items/${itemId}`, {
            method: "PUT",
            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
            body: JSON.stringify({ quantity: newQuantity })
         });
+        if (!res.ok) {
+          // H3: 서버 거절(예: 재고 부족 409) 시 메시지 표시 + 낙관적 업데이트 되돌리기
+          const err = await res.json().catch(() => ({}));
+          alert(err.detail || "수량 변경에 실패했습니다.");
+          fetchCartItems();
+        }
       } catch (e) {
          fetchCartItems();
       }
@@ -71,7 +78,7 @@ export default function CartPage() {
   const handleRemoveItem = async (itemId: number) => {
       setItems(prev => prev.filter(i => i.id !== itemId));
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       try {
         await fetch(`${apiUrl}/api/cart/items/${itemId}`, {
            method: "DELETE",
@@ -119,7 +126,7 @@ export default function CartPage() {
                     <Link href={`/product/${item.product_id}`} className="w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 dark:bg-slate-700 rounded-xl overflow-hidden relative flex-shrink-0 cursor-pointer border border-slate-200 dark:border-slate-600">
                        {item.product_image ? (
                            <img 
-                             src={item.product_image.startsWith("http") ? item.product_image : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${item.product_image}`} 
+                             src={item.product_image.startsWith("http") ? item.product_image : `${API_URL}${item.product_image}`} 
                              alt={item.product_name} 
                              className="w-full h-full object-cover hover:scale-105 transition-transform" 
                            />

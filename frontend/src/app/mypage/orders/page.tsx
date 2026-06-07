@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 import { Package, Clock, CreditCard, Loader2, Truck, Copy } from "lucide-react";
 import Image from "next/image";
 
@@ -25,7 +26,7 @@ interface Order {
 }
 
 export default function OrdersPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 

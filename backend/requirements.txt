@@ -1,12 +1,27 @@
+# ── Core API ────────────────────────────────────────────────
 fastapi
 uvicorn
 sqlalchemy
-psycopg2-binary
-alembic
-pydantic
+pydantic[email]            # EmailStr 사용 (schemas.py) → email-validator 포함
 pydantic-settings
 python-multipart
-python-jose[cryptography]
-passlib[bcrypt]
-cors
-apscheduler
+python-jose[cryptography]  # JWT
+passlib[bcrypt]            # 비밀번호 해시
+httpx                      # PortOne 결제검증 / VTON / AI 번역 REST 호출
+apscheduler                # 백그라운드 스케줄러
+
+# ── DB / Migration ──────────────────────────────────────────
+alembic
+psycopg2-binary            # PostgreSQL 사용 시 (SQLite 기본은 불필요하나 무해)
+
+# ── Image / VTON ────────────────────────────────────────────
+Pillow                     # ai_engine/vton.py 이미지 합성 (top-level import)
+# 누끼(배경제거)는 실행 시점에만 로드(lazy). 사용하려면 아래 주석 해제:
+# rembg
+# onnxruntime
+
+# ── Crawler ─────────────────────────────────────────────────
+beautifulsoup4             # crawler/engine.py HTML 파싱 (bs4)
+selenium                   # crawler/engine.py 웹드라이버
+webdriver-manager          # 크롬드라이버 자동 관리
+# playwright 는 winwin_engine(격리 대상) 일부에서만 사용 → 필요 시 별도 설치

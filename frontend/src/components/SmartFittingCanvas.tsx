@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { API_URL } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
@@ -60,7 +61,7 @@ export default function SmartFittingCanvas({
     }, 300);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/api/vton/smart-fit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -110,23 +110,14 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Ensure DB tables are created
 from backend.database import engine, Base, SessionLocal
-from backend.models import User, Tenant
+from backend.models import User, Tenant, Brand
 from backend.utils.security import get_password_hash
 
 Base.metadata.create_all(bind=engine)
 
-# Ensure hq_products has video_url column (migration fallback for existing DBs)
-try:
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        res = conn.execute(text("PRAGMA table_info(hq_products)")).fetchall()
-        column_names = [row[1] for row in res]
-        if "video_url" not in column_names:
-            conn.execute(text("ALTER TABLE hq_products ADD COLUMN video_url TEXT"))
-            conn.commit()
-            logger.info("Database migration: Added 'video_url' column to hq_products table.")
-except Exception as db_err:
-    logger.warning(f"Failed to check/add 'video_url' column to hq_products: {str(db_err)}")
+# 경량 마이그레이션(누락 컬럼 보강 + datetime 정규화) 단일화 — G1
+from backend.utils.db_migrate import run_lightweight_migrations
+run_lightweight_migrations(engine)
 
 # Seed admin user and default tenants
 db = SessionLocal()
@@ -146,21 +137,8 @@ try:
         db.commit()
         logger.info("Default admin user 'admin@example.com' seeded with password 'admin1234'")
 
-    luxai_admin_exists = db.query(User).filter(User.email == "admin@luxai.com").first()
-    if not luxai_admin_exists:
-        new_luxai_admin = User(
-            email="admin@luxai.com",
-            hashed_password=get_password_hash(os.getenv("SEED_ADMIN_PASSWORD", "admin1234")),
-            name="LUXAI 관리자",
-            role="ADMIN",
-            grade=0,
-            reward_points=0,
-            is_active=True
-        )
-        db.add(new_luxai_admin)
-        db.commit()
-        logger.info("New admin user 'admin@luxai.com' seeded with password 'admin1234'")
-        
+    # B7: 시드 관리자는 admin@example.com 단일화 (중복 기본 관리자 계정 = 공격면 → 제거)
+
     # Seed default tenants
     tenant_exists = db.query(Tenant).filter(Tenant.domain == "hq.mall.com").first()
     if not tenant_exists:
@@ -191,8 +169,38 @@ try:
         db.add(sub_tenant)
         db.commit()
         logger.info("Default tenants 'hq.mall.com' and 'sub1.mall.com' seeded successfully.")
+
+    # Seed default brands
+    default_brands = [
+        {"name": "샤넬", "eng_name": "Chanel", "slug": "chanel", "is_premium": True},
+        {"name": "루이비통", "eng_name": "Louis Vuitton", "slug": "louis-vuitton", "is_premium": True},
+        {"name": "구찌", "eng_name": "Gucci", "slug": "gucci", "is_premium": True},
+        {"name": "프라다", "eng_name": "Prada", "slug": "prada", "is_premium": True},
+        {"name": "에르메스", "eng_name": "Hermes", "slug": "hermes", "is_premium": True},
+        {"name": "디올", "eng_name": "Dior", "slug": "dior", "is_premium": True},
+        {"name": "보테가베네타", "eng_name": "Bottega Veneta", "slug": "bottega-veneta", "is_premium": True},
+        {"name": "미우미우", "eng_name": "Miu Miu", "slug": "miu-miu", "is_premium": True},
+        {"name": "발렌시아가", "eng_name": "Balenciaga", "slug": "balenciaga", "is_premium": True},
+        {"name": "생로랑", "eng_name": "Saint Laurent", "slug": "saint-laurent", "is_premium": True},
+        {"name": "펜디", "eng_name": "Fendi", "slug": "fendi", "is_premium": False},
+        {"name": "버버리", "eng_name": "Burberry", "slug": "burberry", "is_premium": False},
+        {"name": "고야드", "eng_name": "Goyard", "slug": "goyard", "is_premium": False},
+        {"name": "로에베", "eng_name": "Loewe", "slug": "loewe", "is_premium": False}
+    ]
+    for b in default_brands:
+        brand_exists = db.query(Brand).filter(Brand.slug == b["slug"]).first()
+        if not brand_exists:
+            new_brand = Brand(
+                name=b["name"],
+                eng_name=b["eng_name"],
+                slug=b["slug"],
+                is_premium=b["is_premium"]
+            )
+            db.add(new_brand)
+    db.commit()
+    logger.info("Default brands seeded successfully.")
 except Exception as e:
-    logger.error(f"Failed to seed default admin or tenants: {str(e)}")
+    logger.error(f"Failed to seed default admin, tenants or brands: {str(e)}")
 finally:
     db.close()
 

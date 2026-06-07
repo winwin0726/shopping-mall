@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(backend/venv/Scripts/python.exe -m py_compile backend/utils/deps.py backend/main.py backend/routers/orders.py backend/routers/crawler.py)",
+      "Bash(backend/venv/Scripts/python.exe -c \"import backend.utils.deps, backend.routers.orders, backend.routers.crawler; from backend.utils.deps import get_current_admin, get_current_user; print\\('IMPORT_OK', bool\\(get_current_admin\\)\\)\")",
+      "Bash(backend/venv/Scripts/python.exe tmp_authgate_test.py)",
+      "Bash(grep -v -E \"INFO|WARNING|^\\\\s*$\")",
+      "Bash(backend/venv/Scripts/python.exe -c \"import backend.main; print\\('BACKEND_IMPORT_OK'\\)\")",
+      "Bash(backend/venv/Scripts/python.exe tmp_authgate_test2.py)",
+      "Bash(backend/venv/Scripts/python.exe tmp_pay_test.py)",
+      "Bash(backend/venv/Scripts/python.exe -c \"import backend.main; print\\('OK'\\)\")",
+      "Bash(backend/venv/Scripts/python.exe tmp_verify.py)",
+      "Bash(backend/venv/Scripts/python.exe -c \"import backend.main; from backend.utils.security import SECRET_KEY; print\\('OK len\\(SECRET_KEY\\)=', len\\(SECRET_KEY\\)\\)\")",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(grep -iE \"\\(^|/\\)\\\\.env$|\\\\.env\\\\b|secret|\\\\.key$|\\\\.onnx$|auth_state|\\\\.db$|/venv/|node_modules/|\\\\.next/|profile_key|license\\\\.json|telegram_config\")",
+      "Bash(git commit -q -m 'chore: 초기 커밋 — LUXAI 쇼핑몰 \\(A/B/C 보안 개선 반영\\) *)",
+      "Bash(git branch *)",
+      "Bash(grep -iE \"\\\\.env$|secret|\\\\.key$|\\\\.onnx$|auth_state\")",
+      "Bash(git commit -q -m 'chore: 데모 데이터 포함 \\(상품 DB + 업로드 이미지\\) *)"
+    ]
+  }
+}

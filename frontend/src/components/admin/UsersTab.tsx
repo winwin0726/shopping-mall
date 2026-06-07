@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import { User as UserIcon, Shield, ShieldOff, AlertCircle, RefreshCw, Coins, Ticket } from "lucide-react";
@@ -26,7 +26,7 @@ const GRADE_LABELS: Record<number, { label: string; bgClass: string; textClass: 
 };
 
 export default function UsersTab() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

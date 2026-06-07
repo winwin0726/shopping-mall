@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Providers } from '@/components/Providers';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 
@@ -18,13 +17,11 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="antialiased min-h-screen flex flex-col">
-        <Providers>
-          <ThemeProvider>
-            <LayoutWrapper>
-              {children}
-            </LayoutWrapper>
-          </ThemeProvider>
-        </Providers>
+        <ThemeProvider>
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );

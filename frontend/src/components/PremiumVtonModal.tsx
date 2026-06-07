@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, Loader2, Sparkles, UserCircle, Image as ImageIcon, ShoppingBag, ArrowRight } from "lucide-react";
@@ -16,7 +16,7 @@ interface PremiumVtonModalProps {
 type VtonStep = "model_selection" | "upload" | "inference" | "result";
 
 export default function PremiumVtonModal({ isOpen, onClose, onComplete, product_image_url }: PremiumVtonModalProps) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const [step, setStep] = useState<VtonStep>("model_selection");
   const [modelType, setModelType] = useState<"mannequin" | "custom" | null>(null);
   const [resultImg, setResultImg] = useState<string | null>(null);

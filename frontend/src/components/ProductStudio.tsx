@@ -1,5 +1,5 @@
 "use client";
-import { authFetch } from "@/lib/api";
+import { authFetch, API_URL } from "@/lib/api";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
@@ -17,7 +17,7 @@ interface ProductStudioProps {
 }
 
 export default function ProductStudio({ product, categories, onClose, onSaved }: ProductStudioProps) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const isEdit = !!product;
 
   const [form, setForm] = useState({

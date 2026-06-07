@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -8,6 +9,8 @@ from backend.utils.security import SECRET_KEY, ALGORITHM
 
 # This URL is normally the login endpoint
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# 토큰이 없어도 401을 던지지 않는 스킴 (게스트 허용 엔드포인트용)
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -31,6 +34,26 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="비활성화되었거나 탈퇴한 계정입니다.",
         )
+    return user
+
+def get_current_user_optional(
+    token: Optional[str] = Depends(optional_oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """토큰이 없거나 유효하지 않으면 None 을 반환한다(예외 없음).
+    게스트도 허용하되 로그인 시에는 사용자 컨텍스트를 활용하려는 엔드포인트용."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+    except JWTError:
+        return None
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or not user.is_active:
+        return None
     return user
 
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:

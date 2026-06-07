@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 
 export interface ThemeConfig {
   primaryColor?: string;
@@ -122,7 +123,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     async function loadTheme() {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+        const apiUrl = API_URL;
         const domain = typeof window !== "undefined" ? window.location.host : "hq.mall.com";
         const res = await fetch(`${apiUrl}/api/tenant/theme?domain=${domain}`);
         if (res.ok) {
