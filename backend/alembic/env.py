@@ -1,8 +1,8 @@
 import os
 import sys
 
-# Add current directory to path so we can import backend packages
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root directory to path so we can import backend packages
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config
@@ -18,7 +18,15 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+# DATABASE_URL이 지정되지 않은 경우 프로젝트 루트의 sql_app.db 경로를 폴백으로 설정
+db_url = settings.DATABASE_URL
+if not db_url:
+    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _DB_PATH = os.path.join(_BASE_DIR, "sql_app.db")
+    db_url = f"sqlite:///{_DB_PATH}"
+
+config.set_main_option("sqlalchemy.url", db_url)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -44,6 +52,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
 
     with context.begin_transaction():
@@ -65,7 +74,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
         )
 
         with context.begin_transaction():

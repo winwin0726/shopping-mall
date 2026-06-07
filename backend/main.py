@@ -108,16 +108,29 @@ if not os.path.exists(UPLOAD_DIR):
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Ensure DB tables are created
+# Ensure DB tables are created & Migrated via Alembic
 from backend.database import engine, Base, SessionLocal
 from backend.models import User, Tenant, Brand
 from backend.utils.security import get_password_hash
 
-Base.metadata.create_all(bind=engine)
+# [Alembic] 프로그램적 자동 마이그레이션 실행
+from alembic.config import Config
+from alembic import command
 
-# 경량 마이그레이션(누락 컬럼 보강 + datetime 정규화) 단일화 — G1
-from backend.utils.db_migrate import run_lightweight_migrations
-run_lightweight_migrations(engine)
+try:
+    logger.info("Running database migrations via Alembic...")
+    # main.py의 위치를 기준으로 절대 경로를 계산하여 구동환경의 Cwd 영향 방지
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _INI_PATH = os.path.join(_BASE_DIR, "alembic.ini")
+    
+    alembic_cfg = Config(_INI_PATH)
+    # script_location을 패키지 내부 절대경로로 강제 지정
+    alembic_cfg.set_main_option("script_location", os.path.join(_BASE_DIR, "alembic"))
+    
+    command.upgrade(alembic_cfg, "head")
+    logger.info("Database migrations completed successfully.")
+except Exception as migration_error:
+    logger.error(f"Failed to run database migrations: {migration_error}")
 
 # Seed admin user and default tenants
 db = SessionLocal()
