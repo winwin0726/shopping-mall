@@ -2170,16 +2170,51 @@ export default function ProductsTab() {
   const totalPages = Math.ceil(filteredProducts.length / perPage);
   const paged = filteredProducts.slice((page - 1) * perPage, page * perPage);
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, { bg: string; text: string }> = {
-      APPROVED: { bg: "bg-emerald-55/70 border-emerald-200", text: "text-emerald-700" },
-      PENDING: { bg: "bg-yellow-55/70 border-yellow-200", text: "text-yellow-700" },
-      REJECTED: { bg: "bg-red-55/70 border-red-200", text: "text-red-700" },
+  const handleStatusToggle = async (productId: number, currentStatus: string) => {
+    const newStatus = currentStatus === "APPROVED" ? "PENDING" : "APPROVED";
+    try {
+      const res = await authFetch(`${API_URL}/api/admin/product/${productId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("상태 변경에 실패했습니다.");
+      
+      // 로컬 products 상태 갱신
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, status: newStatus } : p))
+      );
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const statusBadge = (status: string, productId?: number) => {
+    const map: Record<string, { bg: string; text: string; label: string }> = {
+      APPROVED: { bg: "bg-emerald-55/70 border-emerald-200 hover:bg-emerald-100", text: "text-emerald-700", label: "승인(판매중)" },
+      PENDING: { bg: "bg-yellow-55/70 border-yellow-200 hover:bg-yellow-100", text: "text-yellow-700", label: "대기(Pending)" },
+      REJECTED: { bg: "bg-red-55/70 border-red-200 hover:bg-red-100", text: "text-red-700", label: "반려" },
     };
-    const s = map[status] || { bg: "bg-slate-100 border-slate-200", text: "text-slate-600" };
+    const s = map[status] || { bg: "bg-slate-100 border-slate-200", text: "text-slate-600", label: status };
+    
+    if (productId) {
+      return (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStatusToggle(productId, status);
+          }}
+          className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${s.bg} ${s.text} transition cursor-pointer`}
+          title="클릭하여 승인/대기 즉시 전환"
+        >
+          {s.label}
+        </button>
+      );
+    }
+    
     return (
       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${s.bg} ${s.text}`}>
-        {status}
+        {s.label}
       </span>
     );
   };
@@ -2840,7 +2875,7 @@ export default function ProductsTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3.5 py-2.5 truncate text-center">{statusBadge(p.status)}</td>
+                    <td className="px-3.5 py-2.5 truncate text-center">{statusBadge(p.status, p.id)}</td>
                     <td className="px-3.5 py-2.5 text-slate-500 text-xs font-mono truncate text-center" title={formatDate(p.created_at)}>{formatDate(p.created_at)}</td>
                     <td className="px-3.5 py-2.5 text-center overflow-visible min-w-[130px]">
                       <div className="flex items-center justify-center gap-2 shrink-0">
@@ -2998,7 +3033,7 @@ export default function ProductsTab() {
                       </div>
                       {!isCompact && (
                         <div className="absolute bottom-2 left-2 z-10">
-                          {statusBadge(p.status)}
+                          {statusBadge(p.status, p.id)}
                         </div>
                       )}
                       <span className="absolute top-2 right-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">

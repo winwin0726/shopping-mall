@@ -150,6 +150,11 @@ def classify_category(title, body, cmap):
                 score += bw
         if score <= 0:
             continue
+        # 맥락(성별/대분류) 보조신호: 품목이 매칭된 경우에만 약하게 가산(동점 분리용)
+        for kw in cat.get("context", []):
+            k = (kw or "").lower()
+            if k and (k in t or k in b):
+                score += 1
         cand = (score, cat.get("level", 0) if prefer_deeper else 0, cat.get("id"))
         if best is None or cand[:2] > best[:2]:
             best = cand

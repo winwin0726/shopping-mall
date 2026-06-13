@@ -4,7 +4,7 @@ import { authFetch, API_URL } from "@/lib/api";
 import { useEffect, useState } from "react";
 import {
   Tags, Plus, Trash2, Loader2, AlertCircle, RefreshCw,
-  FolderTree, ChevronRight, X, Sparkles, Check, ToggleLeft, ToggleRight
+  FolderTree, ChevronRight, X, Sparkles, Check, ToggleLeft, ToggleRight, Download
 } from "lucide-react";
 
 interface Category {
@@ -431,6 +431,14 @@ export default function CategoriesTab() {
               >
                 <RefreshCw size={14} className={`mr-1.5 ${loading ? "animate-spin text-blue-500" : "text-slate-500"}`} /> 새로고침
               </button>
+              <a
+                href={`${apiUrl}/api/category-sync/map/download`}
+                download="luxai-category-map.json"
+                title="크롤러(윈윈)에 넣을 카테고리 분류 JSON을 내려받습니다. 윈윈크롤러는 '통합 환경 설정 > 카테고리 설정'에서 직접 동기화할 수도 있습니다."
+                className="bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-lg flex items-center text-sm transition-colors border border-violet-200 shadow-sm cursor-pointer"
+              >
+                <Download size={14} className="mr-1.5" /> 카테고리 JSON
+              </a>
             </div>
           </div>
 

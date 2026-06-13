@@ -413,7 +413,7 @@ async def crawler_webhook(
             HQProduct.cn_name == raw_title,
         ).first()
         if existing:
-            return {"status": "duplicate", "message": "이미 등록된 상품입니다.", "product_id": existing.id}
+            return {"status": "duplicate", "message": "이미 등록된 상품입니다.", "product_id": existing.id, "product_url": f"/product/{existing.id}"}
 
     # 3) AI 매핑 시도 — 실패(키없음/통신오류)해도 원본 데이터로 폴백 등록 (도킹이 끊기지 않게)
     try:
@@ -487,8 +487,15 @@ async def crawler_webhook(
     cat_name = cat.name if cat else ""
     parsed_sizes = extract_sizes_from_text(f"{kr_name} {kr_desc}", cat_name)
 
-    # 7-2) 브랜드 판별
-    detected_brand_id = detect_brand_id(db, kr_name, kr_desc, cat_name)
+    # 7-2) 브랜드 판별 — 크롤러가 보낸 brand_id(확신 분류) 우선, 없으면 LUXAI 자동탐지로 폴백
+    detected_brand_id = None
+    _pbid = payload.get("brand_id")
+    if _pbid:
+        _pb = db.query(Brand).filter(Brand.id == _pbid, Brand.is_active == True).first()
+        if _pb:
+            detected_brand_id = _pb.id
+    if not detected_brand_id:
+        detected_brand_id = detect_brand_id(db, kr_name, kr_desc, cat_name)
 
     # 8) 상품 등록
     new_prod = HQProduct(
@@ -519,11 +526,43 @@ async def crawler_webhook(
         "status": "success",
         "message": f"수집 데이터 등록 완료: {new_prod.kr_name} (도매 {wholesale_krw:,}원 → 소매 {base_price:,}원, 사이즈 {len(parsed_sizes)}종, 이미지 {len(web_images)}장)",
         "product_id": new_prod.id,
+        "product_url": f"/product/{new_prod.id}",
         "wholesale_price": wholesale_krw,
         "price": base_price,
         "parsed_sizes": parsed_sizes,
         "ai_mapped": bool(mapped),
     }
+
+class ExistsRequest(BaseModel):
+    source_urls: List[str] = []
+
+
+@router.post("/exists")
+def crawler_exists(
+    payload: ExistsRequest,
+    token: Optional[str] = Query(None),
+    x_crawler_token: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """[중복 사전체크] 크롤러가 전송 전에 source_url 목록을 보내면, 이미 등록된 것만 돌려준다.
+    크롤러는 이걸로 '이미 등록' 배지를 띄워 헛전송을 막는다. (webhook과 동일한 토큰 검증)"""
+    hq = db.query(Tenant).filter(Tenant.domain == "hq.mall.com").first()
+    crawler_settings = (hq.theme_config or {}).get("crawlerSettings", {}) if hq else {}
+    DEFAULT_TOKEN = "LUXAI-WINWIN-TOKEN-1234"
+    configured_token = (crawler_settings.get("securityToken") or "").strip()
+    req_token = token or x_crawler_token
+    if not configured_token or configured_token == DEFAULT_TOKEN:
+        raise HTTPException(status_code=403, detail="크롤러 보안 토큰이 미설정/기본값 상태입니다.")
+    if req_token != configured_token:
+        raise HTTPException(status_code=401, detail="보안 토큰이 일치하지 않습니다.")
+
+    urls = [u for u in (payload.source_urls or []) if u]
+    if not urls:
+        return {"existing": [], "count": 0}
+    rows = db.query(HQProduct.original_source_url).filter(HQProduct.original_source_url.in_(urls)).all()
+    existing = sorted({r[0] for r in rows if r[0]})
+    return {"existing": existing, "count": len(existing)}
+
 
 # ====================================================
 # 기존 백그라운드 크롤러 구동 엔드포인트
