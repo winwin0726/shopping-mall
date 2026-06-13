@@ -2777,12 +2777,14 @@ export default function ProductsTab() {
                       </div>
                     </td>
                     <td className="px-3.5 py-2.5 font-semibold text-slate-800 overflow-hidden">
-                      <div className="truncate text-sm" title={p.kr_name}>{p.kr_name}</div>
-                      {p.brand_name && (
-                        <span className="text-[10px] font-bold text-blue-650 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5 mt-1 inline-block truncate max-w-full" title={p.brand_name}>
-                          {p.brand_name}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate text-sm" title={p.kr_name}>{p.kr_name}</span>
+                        {p.brand_name && p.brand_name !== "미지정" && (
+                          <span className="text-[10px] font-bold text-blue-650 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5 shrink-0" title={p.brand_name}>
+                            {p.brand_name}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3.5 py-2.5 text-slate-600 truncate text-sm text-center" title={p.category_name || "미지정"}>{p.category_name || "미지정"}</td>
                     <td className="px-3.5 py-2.5 overflow-hidden text-center">

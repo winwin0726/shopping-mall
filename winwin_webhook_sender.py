@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import glob
+import json
 import mimetypes
 import argparse
 
@@ -43,7 +44,9 @@ WEBHOOK_TOKEN = os.environ.get("WEBHOOK_TOKEN", "")           # 관리자에서 
 LOGIN_EMAIL = os.environ.get("MALL_EMAIL", "admin@example.com")
 LOGIN_PASSWORD = os.environ.get("MALL_PASSWORD", "admin1234")
 SOURCE_DIR = os.environ.get("WINWIN_SOURCE_DIR", "")          # 윈윈크롤러 수집 폴더(상품별 하위폴더)
-DEFAULT_CATEGORY_ID = int(os.environ.get("CATEGORY_ID", "1") or "1")
+DEFAULT_CATEGORY_ID = int(os.environ.get("CATEGORY_ID", "1") or "1")  # 자동분류 실패 시 폴백
+CATEGORY_MAP_FILE = os.environ.get("CATEGORY_MAP_FILE", "")   # LUXAI 카테고리맵 JSON 경로(비우면 서버서 자동 fetch)
+AUTO_CLASSIFY = os.environ.get("AUTO_CLASSIFY", "1") != "0"   # 제목/본문 자동 카테고리 분류 (기본 ON)
 # ============================================================================
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
@@ -94,6 +97,67 @@ def _parse_price(text):
     return 0
 
 
+_catmap = {"data": None, "loaded": False}
+
+
+def load_category_map():
+    """LUXAI 카테고리맵 로드 — CATEGORY_MAP_FILE 우선, 없으면 서버에서 fetch. 1회 캐시."""
+    if _catmap["loaded"]:
+        return _catmap["data"]
+    _catmap["loaded"] = True
+    data = None
+    try:
+        if CATEGORY_MAP_FILE and os.path.isfile(CATEGORY_MAP_FILE):
+            with open(CATEGORY_MAP_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            print(f"  (카테고리맵 파일 로드: {CATEGORY_MAP_FILE}, {data.get('category_count')}개)")
+        else:
+            token = _login()
+            r = requests.get(f"{MALL_URL}/api/category-sync/map",
+                             headers={"Authorization": f"Bearer {token}"}, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            print(f"  (카테고리맵 서버 fetch: {data.get('category_count')}개)")
+    except Exception as e:
+        print(f"  ⚠️ 카테고리맵 로드 실패 → 자동분류 끄고 기본 카테고리 사용: {e}")
+        data = None
+    _catmap["data"] = data
+    return data
+
+
+def classify_category(title, body, cmap):
+    """제목/본문 → category_id (cmap 키워드 점수매칭). cmap 없으면 None."""
+    if not cmap:
+        return None
+    cfg = cmap.get("match") or {}
+    tw, bw = cfg.get("title_weight", 5), cfg.get("body_weight", 1)
+    min_score = cfg.get("min_score", 1)
+    prefer_deeper = cfg.get("prefer_deeper", True)
+    t, b = (title or "").lower(), (body or "").lower()
+    both = t + " " + b
+    best = None
+    for cat in cmap.get("categories", []):
+        if any(x and x.lower() in both for x in cat.get("exclude", [])):
+            continue
+        score = 0
+        for kw in cat.get("keywords", []):
+            k = (kw or "").lower()
+            if not k:
+                continue
+            if k in t:
+                score += tw
+            if k in b:
+                score += bw
+        if score <= 0:
+            continue
+        cand = (score, cat.get("level", 0) if prefer_deeper else 0, cat.get("id"))
+        if best is None or cand[:2] > best[:2]:
+            best = cand
+    if best and best[0] >= min_score:
+        return best[2]
+    return cmap.get("fallback_category_id")
+
+
 def send_product(title, desc, image_urls, source_url, category_id, price=0):
     """webhook 으로 상품 1건 전송."""
     payload = {
@@ -132,12 +196,13 @@ def process_folder(folder, dry_run=False):
     price = _parse_price(text)
     source_url = f"winwin://{os.path.basename(folder)}"
 
-    print(f"\n[폴더] {os.path.basename(folder)}  (이미지 {len(imgs)}장, 가격추정 {price})")
+    cat_id = (classify_category(title, text, load_category_map()) if AUTO_CLASSIFY else None) or DEFAULT_CATEGORY_ID
+    print(f"\n[폴더] {os.path.basename(folder)}  (이미지 {len(imgs)}장, 가격추정 {price}, 자동분류→category_id={cat_id})")
     if dry_run:
         print(f"  └ (dry-run) 제목: {title[:40]}")
         return
     image_urls = upload_images(imgs)
-    r = send_product(title, text, image_urls, source_url, DEFAULT_CATEGORY_ID, price)
+    r = send_product(title, text, image_urls, source_url, cat_id, price)
     try:
         print(f"  └ {r.status_code}: {_short(r.json())}")
     except Exception:
@@ -146,12 +211,15 @@ def process_folder(folder, dry_run=False):
 
 def cmd_demo():
     print("== 연결 테스트(샘플 1건 전송) ==")
+    title = "연결테스트 남성 반팔 티셔츠"
+    cat_id = (classify_category(title, "", load_category_map()) if AUTO_CLASSIFY else None) or DEFAULT_CATEGORY_ID
+    print(f"  자동분류 결과: category_id={cat_id}")
     r = send_product(
-        title="연결테스트 샘플상품",
+        title=title,
         desc="이 상품이 관리자 상품목록에 보이면 도킹 연결 성공입니다. (S M L 사이즈)",
         image_urls=["https://cdn-icons-png.flaticon.com/512/863/863684.png"],
         source_url="winwin://demo-sample",
-        category_id=DEFAULT_CATEGORY_ID,
+        category_id=cat_id,
         price=100,
     )
     try:
