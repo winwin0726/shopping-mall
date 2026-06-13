@@ -6,6 +6,7 @@ from backend.database import get_db
 from backend.models import HQProduct, Category, User, Tenant, SupportTicket, Brand
 from backend.config import settings
 from backend.utils.gemini import generate_text, GeminiError
+from backend.crawler.ai_translator import AITranslatorPipeline
 
 router = APIRouter()
 
@@ -57,6 +58,11 @@ async def pre_generate_transparent_clothing_task(product_id: int):
                 product.transparent_item_image_url = transparent_url
                 db.commit()
                 logger.info(f"Background transparent image pre-generation success for Product {product_id}: {transparent_url}")
+                # [고도화 추가] 백그라운드 누끼 가공 성공 시 마네킹 착장 및 마스크 사전 렌더링 자동 기동
+                try:
+                    await generator.pre_render_mannequin_fit(db, product.id)
+                except Exception as e_pr:
+                    logger.error(f"Background pre-render mannequin fit failed for Product {product_id}: {e_pr}")
     except Exception as e:
         logger.error(f"Background transparent image pre-generation failed for Product {product_id}: {e}")
         db.rollback()
@@ -73,13 +79,21 @@ def get_pending_products(db: Session = Depends(get_db)):
     
     result = []
     for p in products:
+        image_url = None
+        if p.images and len(p.images) > 0:
+            image_url = p.images[0]
+        else:
+            image_url = p.ai_fitting_image_url
+
         result.append({
             "id": p.id,
             "originalName": p.cn_name,
             "name": p.kr_name,
             "price": p.base_price,
             "margin": "30%", # Dummy for now
-            "imageUrl": p.ai_fitting_image_url
+            "imageUrl": image_url,
+            "description": p.kr_description or "",
+            "images": p.images or []
         })
     return result
 
@@ -148,31 +162,87 @@ class CategoryMarginUpdate(BaseModel):
     margin_value: float    # percent면 %, fixed면 원(￦)
 
 @router.put("/category/{cat_id}/margin")
-def update_category_margin(cat_id: int, payload: CategoryMarginUpdate, recompute: bool = False, db: Session = Depends(get_db)):
+def update_category_margin(cat_id: int, payload: CategoryMarginUpdate, recompute: bool = False, include_children: bool = False, db: Session = Depends(get_db)):
     """카테고리별 소매 마진(%/고정) 저장. recompute=true면 이 카테고리 기존 상품의 소매가도 재계산.
-    (윈윈 도매가 × 마진 = 소매가. percent는 천원 단위 올림.)"""
+    include_children=true면 하위 카테고리 마진율도 일괄 저장하고 소매가를 재계산."""
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
     mt = (payload.margin_type or "percent").lower()
     if mt not in ("percent", "fixed"):
         mt = "percent"
+    val = float(payload.margin_value or 0)
     cat.margin_type = mt
-    cat.margin_value = float(payload.margin_value or 0)
+    cat.margin_value = val
 
     updated = 0
+    from backend.routers.crawler import compute_retail_price
+    
+    # 1. 본인 카테고리 재계산
     if recompute:
-        from backend.routers.crawler import compute_retail_price
         prods = db.query(HQProduct).filter(HQProduct.category_id == cat_id).all()
         for p in prods:
             if p.wholesale_price and p.wholesale_price > 0:
                 p.base_price = compute_retail_price(p.wholesale_price, cat.margin_type, cat.margin_value)
                 updated += 1
+
+    # 2. 하위 카테고리 일괄 변경 및 재계산
+    if include_children:
+        children = db.query(Category).filter(Category.parent_id == cat_id).all()
+        for child in children:
+            child.margin_type = mt
+            child.margin_value = val
+            if recompute:
+                child_prods = db.query(HQProduct).filter(HQProduct.category_id == child.id).all()
+                for cp in child_prods:
+                    if cp.wholesale_price and cp.wholesale_price > 0:
+                        cp.base_price = compute_retail_price(cp.wholesale_price, child.margin_type, child.margin_value)
+                        updated += 1
+                        
     db.commit()
     return {
         "status": "success", "category_id": cat_id,
         "margin_type": cat.margin_type, "margin_value": cat.margin_value,
         "recomputed_products": updated,
+    }
+
+
+class BulkMarginUpdate(BaseModel):
+    margin_value: float
+    margin_type: Optional[str] = "percent"
+
+@router.put("/categories/margin/bulk")
+def bulk_update_categories_margin(payload: BulkMarginUpdate, recompute: bool = False, db: Session = Depends(get_db)):
+    """전체 카테고리 마진 일괄 수정 (% 및 고정단위 지원)"""
+    categories = db.query(Category).all()
+    mt = (payload.margin_type or "percent").lower()
+    if mt not in ("percent", "fixed"):
+        mt = "percent"
+    val = float(payload.margin_value or 0)
+    
+    updated_cats = 0
+    updated_prods = 0
+    from backend.routers.crawler import compute_retail_price
+    
+    for cat in categories:
+        cat.margin_type = mt
+        cat.margin_value = val
+        updated_cats += 1
+        
+        if recompute:
+            prods = db.query(HQProduct).filter(HQProduct.category_id == cat.id).all()
+            for p in prods:
+                if p.wholesale_price and p.wholesale_price > 0:
+                    p.base_price = compute_retail_price(p.wholesale_price, cat.margin_type, cat.margin_value)
+                    updated_prods += 1
+                    
+    db.commit()
+    return {
+        "status": "success",
+        "updated_categories": updated_cats,
+        "recomputed_products": updated_prods,
+        "margin_type": mt,
+        "margin_value": val
     }
 
 
@@ -199,7 +269,7 @@ class BrandUpdate(BaseModel):
 @router.get("/brands", response_model=List[dict])
 def get_admin_brands(db: Session = Depends(get_db)):
     """ HQ Admin: 모든 브랜드 목록 조회 """
-    brands = db.query(Brand).order_by(Brand.eng_name.asc()).all()
+    brands = db.query(Brand).order_by(Brand.name.asc()).all()
     result = []
     for b in brands:
         result.append({
@@ -493,11 +563,13 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 class ExtractTransparentRequest(BaseModel):
     image_url: str
+    model_name: Optional[str] = "u2net"
+    category_id: Optional[int] = None
 
 @router.post("/ai/extract-transparent")
-async def extract_image_transparent_generic(payload: ExtractTransparentRequest):
+async def extract_image_transparent_generic(payload: ExtractTransparentRequest, db: Session = Depends(get_db)):
     """
-    HQ Admin: 특정 이미지 1컷에 대해 수동으로 AI 누끼(배경 제거) 가공을 수행합니다 (상품 ID 무관).
+    HQ Admin: 특정 이미지 1컷에 대해 수동으로 AI 누끼(배경 제거) 및 마네킹 피팅(VTON) 가공을 수행합니다 (상품 ID 무관).
     """
     orig_url = payload.image_url.strip()
     if not orig_url:
@@ -512,15 +584,46 @@ async def extract_image_transparent_generic(payload: ExtractTransparentRequest):
     from backend.ai_engine.vton import AIFittingPreGenerator
     try:
         generator = AIFittingPreGenerator()
-        transparent_url = await generator.extract_transparent_clothing(orig_url)
+        transparent_url = await generator.extract_transparent_clothing(orig_url, model_name=payload.model_name or "u2net")
         if transparent_url:
+            ai_fitting_image_url = None
+            if payload.category_id:
+                try:
+                    cat = db.query(Category).filter(Category.id == payload.category_id).first()
+                    if cat:
+                        cat_name = cat.name.lower()
+                        is_top = True
+                        gender = "female"
+                        
+                        # 성별 판별
+                        if any(x in cat_name for x in ["여성", "women", "female", "여자", "womens"]):
+                            gender = "female"
+                        elif any(x in cat_name for x in ["남성", "men", "male", "남자", "mens"]):
+                            gender = "male"
+                            
+                        # 상의/하의 판별
+                        if any(x in cat_name for x in ["바지", "스커트", "하의", "bottom", "pants", "skirt", "jeans"]):
+                            is_top = False
+                            
+                        # render_mannequin_fit_generic 호출
+                        ai_fitting_image_url = await generator.render_mannequin_fit_generic(
+                            transparent_image_url=transparent_url,
+                            gender=gender,
+                            is_top=is_top
+                        )
+                except Exception as e_fit:
+                    logger.error(f"Generic temporary mannequin fit failed: {e_fit}")
+
             return {
                 "status": "success",
-                "message": "AI 누끼 가공이 완료되었습니다.",
-                "transparent_item_image_url": transparent_url
+                "message": "AI 누끼 및 가상 피팅 가공이 완료되었습니다.",
+                "transparent_item_image_url": transparent_url,
+                "ai_fitting_image_url": ai_fitting_image_url
             }
         else:
             raise HTTPException(status_code=500, detail="AI 누끼 이미지 생성 결과가 없습니다.")
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"배경 제거 중 AI 엔진 내부 오류 발생: {str(e)}")
 
@@ -545,18 +648,35 @@ async def extract_product_image_transparent(product_id: int, payload: ExtractTra
         
     from backend.ai_engine.vton import AIFittingPreGenerator
     try:
+        # 카테고리 매핑 파악하여 누끼 가공에 주입 (옷걸이 지능형 제거 지원)
+        category_type = "Top" # 기본값
+        if product.category:
+            cat_name = product.category.name.lower()
+            if any(x in cat_name for x in ["bottom", "하의", "pants", "denim", "jeans"]):
+                category_type = "Bottom"
+            elif any(x in cat_name for x in ["shoes", "신발"]):
+                category_type = "Shoes"
+                
         generator = AIFittingPreGenerator()
-        transparent_url = await generator.extract_transparent_clothing(orig_url)
+        transparent_url = await generator.extract_transparent_clothing(orig_url, model_name=payload.model_name or "u2net", category_type=category_type)
         if transparent_url:
             product.transparent_item_image_url = transparent_url
             db.commit()
+            # [고도화 추가] 마네킹 착장 및 마스크 사전 렌더링 기동
+            try:
+                await generator.pre_render_mannequin_fit(db, product.id)
+            except Exception as e_pr:
+                logger.error(f"Manual pre-render mannequin fit failed for Product {product_id}: {e_pr}")
             return {
                 "status": "success",
-                "message": "AI 누끼 가공이 완료되었습니다.",
-                "transparent_item_image_url": transparent_url
+                "message": "AI 누끼 및 마네킹 착장 가공이 완료되었습니다.",
+                "transparent_item_image_url": transparent_url,
+                "ai_fitting_image_url": product.ai_fitting_image_url
             }
         else:
             raise HTTPException(status_code=500, detail="AI 누끼 이미지 생성 결과가 없습니다.")
+    except HTTPException as he:
+        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"배경 제거 중 AI 엔진 내부 오류 발생: {str(e)}")
@@ -1114,4 +1234,182 @@ def ai_autofill_product(payload: ProductAIAutofillRequest, db: Session = Depends
         raise HTTPException(status_code=502, detail=f"Gemini API 호출 에러: {e}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Gemini 응답을 JSON 으로 파싱하지 못했습니다.")
+
+
+# ==========================================
+# AI Translation Engine Integration (AI 번역 엔드포인트)
+# ==========================================
+
+# 일괄 번역 상태 관리용 글로벌 변수
+bulk_translate_state = {
+    "is_running": False,
+    "total": 0,
+    "current": 0,
+    "success": 0,
+    "failed": 0,
+    "should_stop": False
+}
+
+class BulkTranslateRequest(BaseModel):
+    product_ids: List[int]
+
+async def run_bulk_translate_task(product_ids: List[int]):
+    global bulk_translate_state
+    
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    translator = AITranslatorPipeline()
+    
+    try:
+        for pid in product_ids:
+            if bulk_translate_state["should_stop"]:
+                logger.info("Bulk translation stopped by user request.")
+                break
+                
+            product = db.query(HQProduct).filter(HQProduct.id == pid).first()
+            if not product:
+                bulk_translate_state["current"] += 1
+                bulk_translate_state["failed"] += 1
+                continue
+                
+            try:
+                # 중국어 원문(cn_name, kr_description)을 기준으로 번역
+                cn_title = product.cn_name or product.kr_name or ""
+                cn_desc = product.kr_description or ""
+                
+                cat_name = "의류"
+                if product.category:
+                    cat_name = product.category.name
+                
+                translated = await translator.translate_product_info(
+                    cn_title=cn_title,
+                    cn_desc=cn_desc,
+                    wholesale_price_krw=product.wholesale_price or 0,
+                    category_name=cat_name,
+                    original_source_url=product.original_source_url or ""
+                )
+                
+                product.kr_name = translated.get("kr_name") or product.kr_name
+                product.kr_description = translated.get("kr_description") or product.kr_description
+                product.description_html = translated.get("description_html") or product.description_html
+                
+                if translated.get("product_code"):
+                    product.sku = translated.get("product_code")
+                if translated.get("sale_price"):
+                    product.wholesale_price = translated.get("sale_price")
+                    if product.category:
+                        from backend.routers.crawler import compute_retail_price
+                        product.base_price = compute_retail_price(
+                            product.wholesale_price,
+                            product.category.margin_type,
+                            product.category.margin_value
+                        )
+                
+                db.commit()
+                bulk_translate_state["success"] += 1
+            except Exception as e:
+                logger.error(f"Bulk translate error for product {pid}: {e}")
+                db.rollback()
+                bulk_translate_state["failed"] += 1
+            finally:
+                bulk_translate_state["current"] += 1
+    finally:
+        db.close()
+        bulk_translate_state["is_running"] = False
+
+@router.post("/product/{product_id}/translate")
+async def translate_single_product(product_id: int, db: Session = Depends(get_db)):
+    """
+    개별 상품 AI 번역 API
+    """
+    product = db.query(HQProduct).filter(HQProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+        
+    cn_title = product.cn_name or product.kr_name or ""
+    cn_desc = product.kr_description or ""
+    
+    cat_name = "의류"
+    if product.category:
+        cat_name = product.category.name
+    
+    translator = AITranslatorPipeline()
+    translated = await translator.translate_product_info(
+        cn_title=cn_title,
+        cn_desc=cn_desc,
+        wholesale_price_krw=product.wholesale_price or 0,
+        category_name=cat_name,
+        original_source_url=product.original_source_url or ""
+    )
+    
+    product.kr_name = translated.get("kr_name") or product.kr_name
+    product.kr_description = translated.get("kr_description") or product.kr_description
+    product.description_html = translated.get("description_html") or product.description_html
+    
+    if translated.get("product_code"):
+        product.sku = translated.get("product_code")
+    if translated.get("sale_price"):
+        product.wholesale_price = translated.get("sale_price")
+        if product.category:
+            product.base_price = compute_retail_price(
+                product.wholesale_price,
+                product.category.margin_type,
+                product.category.margin_value
+            )
+        
+    db.commit()
+    db.refresh(product)
+    
+    return {
+        "status": "success",
+        "id": product.id,
+        "kr_name": product.kr_name,
+        "kr_description": product.kr_description,
+        "sku": product.sku,
+        "wholesale_price": product.wholesale_price,
+        "base_price": product.base_price
+    }
+
+@router.post("/products/bulk-translate")
+def bulk_translate_products(payload: BulkTranslateRequest, bg_tasks: BackgroundTasks):
+    """
+    일괄 상품 AI 번역 API (백그라운드 태스크)
+    """
+    global bulk_translate_state
+    
+    if bulk_translate_state["is_running"]:
+        raise HTTPException(status_code=400, detail="이미 다른 일괄 번역 작업이 진행 중입니다.")
+        
+    product_ids = payload.product_ids
+    bulk_translate_state = {
+        "is_running": True,
+        "total": len(product_ids),
+        "current": 0,
+        "success": 0,
+        "failed": 0,
+        "should_stop": False
+    }
+    
+    bg_tasks.add_task(run_bulk_translate_task, product_ids)
+    return {"status": "success", "message": f"{len(product_ids)}개 상품 일괄 번역 시작"}
+
+@router.get("/products/bulk-translate/status")
+def get_bulk_translate_status():
+    """
+    일괄 번역 진행도 조회 API
+    """
+    global bulk_translate_state
+    return bulk_translate_state
+
+@router.post("/products/bulk-translate/stop")
+def stop_bulk_translate():
+    """
+    일괄 번역 중단 API
+    """
+    global bulk_translate_state
+    if not bulk_translate_state["is_running"]:
+        return {"status": "ignored", "message": "진행 중인 일괄 번역 작업이 없습니다."}
+        
+    bulk_translate_state["should_stop"] = True
+    return {"status": "success", "message": "일괄 번역 작업 중단 요청 완료"}
 
