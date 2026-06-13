@@ -425,12 +425,25 @@ async def crawler_webhook(
     # 4) 필드 확정 (매핑값 우선, 없으면 원본 폴백) — kr_name 은 절대 None 금지
     kr_name = (mapped.get("kr_name") or raw_title or "[수집] 미상 상품").strip()[:50]
     kr_desc = mapped.get("kr_description") or raw_desc
-    category_id = mapped.get("category_id") or payload.get("category_id")
+    # [자동분류 우선] 크롤러가 LUXAI 카테고리맵으로 '확신 분류'해 보낸 category_id 를 최우선 신뢰.
+    # (없을 때만 Gemini 추측 → 카테고리 이름매칭 → 기본값 1 순으로 폴백)
+    category_id = payload.get("category_id") or mapped.get("category_id")
     # [윈윈 도킹] 윈윈이 보낸 카테고리 '이름'(가방/지갑/신발 등)으로도 매칭 (이미 분류된 상태)
     if not category_id and payload.get("category"):
         _cat_by_name = db.query(Category).filter(Category.name == str(payload.get("category")).strip()).first()
         if _cat_by_name:
             category_id = _cat_by_name.id
+    # [서버측 폴백 분류] 그래도 못 정하면 LUXAI 자체 키워드 분류기로 제목/본문 분석.
+    # (크롤러가 분류를 안 했거나 Gemini 미설정인 경우 → 무작정 1번으로 떨어지지 않게)
+    if not category_id:
+        try:
+            from backend.utils.category_classifier import build_category_map as _bcm, classify as _clf
+            _all_cats = db.query(Category).order_by(Category.id).all()
+            _res = _clf(raw_title, raw_desc, _bcm(_all_cats))
+            if _res.get("score", 0) > 0 and _res.get("category_id"):
+                category_id = _res["category_id"]
+        except Exception as _ce:
+            logger.warning(f"[webhook] 서버측 폴백 분류 실패: {_ce}")
     category_id = category_id or 1
 
     # 5) 가격: [윈윈 도킹] 원화 '도매가'가 오면 카테고리별 마진으로 소매가 산출.
