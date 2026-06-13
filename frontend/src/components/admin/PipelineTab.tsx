@@ -1607,7 +1607,7 @@ export default function PipelineTab() {
         <div className="flex flex-col items-center justify-center p-24 bg-white border border-slate-200 rounded-2xl text-slate-400 shadow-sm">
           <CheckCircle size={64} className="mb-6 text-emerald-500/50" />
           <h3 className="text-xl font-bold text-emerald-700 mb-2">승인 대기 중인 상품이 없습니다</h3>
-          <p className="text-sm text-slate-500 text-center max-w-sm">AI 크롤러가 수집한 모든 상품의 승인이 완료되어, 쇼핑몰 상품 목록에 성공적으로 등록되었습니다.</p>
+          <p className="text-sm text-slate-500 text-center max-w-sm">수집된 상품이 없거나, 대기 중인 모든 상품의 승인 및 쇼핑몰 등록 처리가 완료되었습니다.</p>
         </div>
       ) : (
         <div className="space-y-4">
