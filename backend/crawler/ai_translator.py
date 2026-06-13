@@ -248,6 +248,11 @@ class AITranslatorPipeline:
                 
                 lines.append(f"✔ 사이즈 : {sizes}")
                 for rec in size_recommendations:
+                    # 대표 사이즈와 추천 사이즈가 동일하면 중복 출력을 건너뜀
+                    if rec.strip() == sizes.strip():
+                        continue
+                    if rec.replace(" ", "").lower() == sizes.replace(" ", "").lower():
+                        continue
                     lines.append(f"  {rec}")
                 
                 lines.append("ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ")

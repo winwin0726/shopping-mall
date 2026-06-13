@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from backend.database import get_db
-from backend.models import HQProduct, Category, Brand
+from backend.models import HQProduct, Category, Brand, User
+from backend.utils.deps import get_current_user_optional
 
 router = APIRouter()
 
@@ -11,11 +12,11 @@ FALLBACK_PRODUCT_IMAGE = "https://cdn-icons-png.flaticon.com/512/863/863684.png"
 
 
 def _display_image(p) -> str:
-    """상품 목록/카드용 표시 이미지 단일 규칙 (D5: 누끼 → 피팅 → 갤러리 → 폴백)."""
+    """상품 목록/카드용 표시 이미지 단일 규칙 (D5: 갤러리 ➔ 피팅 ➔ 누끼 ➔ 폴백)."""
     return (
-        p.transparent_item_image_url
+        (p.images[0] if p.images else None)
         or p.ai_fitting_image_url
-        or (p.images[0] if p.images else None)
+        or p.transparent_item_image_url
         or FALLBACK_PRODUCT_IMAGE
     )
 
@@ -61,6 +62,8 @@ def get_all_brands(
 def get_products(
     brand_id: Optional[int] = Query(None),
     brand_slug: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -73,8 +76,12 @@ def get_products(
         query = query.filter(HQProduct.brand_id == brand_id)
     if brand_slug is not None:
         query = query.filter(Brand.slug == brand_slug)
+    if search:
+        query = query.filter(HQProduct.kr_name.contains(search))
         
     products = query.all()
+    
+    is_masked = current_user is None or current_user.grade == 5
     
     result = []
     for p in products:
@@ -88,16 +95,16 @@ def get_products(
             
         result.append({
             "id": p.id,
-            "name": p.kr_name,
+            "name": "🔒 가입 후 확인 가능" if is_masked else p.kr_name,
             "category": layer,
             "category_id": p.category_id,
             "category_name": p.category.name if p.category else "기타",
             "brand_id": p.brand_id,
             "brand_name": p.brand.name if p.brand else "미지정",
             "brand_eng_name": p.brand.eng_name if p.brand else "",
-            "price": p.base_price,
-            "sale_price": p.sale_price,
-            "discount_rate": p.discount_rate,
+            "price": 0 if is_masked else p.base_price,
+            "sale_price": 0 if is_masked else p.sale_price,
+            "discount_rate": 0 if is_masked else p.discount_rate,
             "transparentImage": _display_image(p),
         })
     
@@ -109,6 +116,7 @@ def get_products_by_category(
     sub_category: str = None, 
     brand_id: Optional[int] = Query(None),
     brand_slug: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -167,6 +175,8 @@ def get_products_by_category(
         
     real_products = query.all()
     
+    is_masked = current_user is None or current_user.grade == 5
+    
     result = []
     for p in real_products:
         cat_slug = p.category.slug if p.category else "top"
@@ -179,7 +189,7 @@ def get_products_by_category(
             
         result.append({
             "id": p.id,
-            "name": p.kr_name,
+            "name": "🔒 가입 후 확인 가능" if is_masked else p.kr_name,
             "category": layer,
             "category_id": p.category_id,
             "category_name": p.category.name if p.category else "기타",
@@ -187,16 +197,20 @@ def get_products_by_category(
             "brand_id": p.brand_id,
             "brand_name": p.brand.name if p.brand else "미지정",
             "brand_eng_name": p.brand.eng_name if p.brand else "",
-            "price": p.base_price,
-            "sale_price": p.sale_price,
-            "discount_rate": p.discount_rate,
+            "price": 0 if is_masked else p.base_price,
+            "sale_price": 0 if is_masked else p.sale_price,
+            "discount_rate": 0 if is_masked else p.discount_rate,
             "transparentImage": _display_image(p),
         })
         
     return result
 
 @router.get("/{product_id}")
-def get_product_detail(product_id: int, db: Session = Depends(get_db)):
+def get_product_detail(
+    product_id: int, 
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
     """
     스토어프론트: 상품 단건 상세 조회
     - 상품의 모든 필드 반환
@@ -211,6 +225,8 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
     
+    is_masked = current_user is None or current_user.grade == 5
+    
     # 같은 카테고리의 관련 상품 (자기 자신 제외, 최대 8개)
     related = db.query(HQProduct).filter(
         HQProduct.category_id == product.category_id,
@@ -222,10 +238,10 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
     for r in related:
         related_list.append({
             "id": r.id,
-            "name": r.kr_name,
-            "price": r.base_price,
-            "sale_price": r.sale_price,
-            "discount_rate": r.discount_rate,
+            "name": "🔒 가입 후 확인 가능" if is_masked else r.kr_name,
+            "price": 0 if is_masked else r.base_price,
+            "sale_price": 0 if is_masked else r.sale_price,
+            "discount_rate": 0 if is_masked else r.discount_rate,
             "image": (r.images[0] if r.images and len(r.images) > 0 
                       else r.ai_fitting_image_url 
                       or FALLBACK_PRODUCT_IMAGE),
@@ -235,25 +251,25 @@ def get_product_detail(product_id: int, db: Session = Depends(get_db)):
     
     return {
         "id": product.id,
-        "name": product.kr_name,
-        "cn_name": product.cn_name,
+        "name": "🔒 가입 후 확인 가능" if is_masked else product.kr_name,
+        "cn_name": "" if is_masked else product.cn_name,
         "category": cat_name,
         "category_id": product.category_id,
         "brand_id": product.brand_id,
         "brand_name": product.brand.name if product.brand else "미지정",
         "brand_eng_name": product.brand.eng_name if product.brand else "",
-        "description": product.kr_description,
-        "description_html": product.description_html,
-        "base_price": product.base_price,
-        "sale_price": product.sale_price,
-        "discount_rate": product.discount_rate,
-        "stock_quantity": product.stock_quantity,
-        "sku": product.sku,
-        "keywords": product.keywords or [],
-        "images": product.images or [],
-        "ai_fitting_image_url": product.ai_fitting_image_url,
-        "transparent_item_image_url": product.transparent_item_image_url,
-        "created_at": str(product.created_at) if product.created_at else None,
+        "description": "가입 승인 후 조회가 가능합니다." if is_masked else product.kr_description,
+        "description_html": "<div class='product-description'>🔒 가입 승인 후 상세 정보 조회가 가능합니다.</div>" if is_masked else product.description_html,
+        "base_price": 0 if is_masked else product.base_price,
+        "sale_price": 0 if is_masked else product.sale_price,
+        "discount_rate": 0 if is_masked else product.discount_rate,
+        "stock_quantity": 0 if is_masked else product.stock_quantity,
+        "sku": "🔒" if is_masked else product.sku,
+        "keywords": [] if is_masked else (product.keywords or []),
+        "images": [] if is_masked else (product.images or []),
+        "ai_fitting_image_url": None if is_masked else product.ai_fitting_image_url,
+        "transparent_item_image_url": None if is_masked else product.transparent_item_image_url,
+        "created_at": str(product.created_at) if (product.created_at and not is_masked) else None,
         "related_products": related_list,
     }
 

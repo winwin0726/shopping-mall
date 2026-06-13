@@ -119,7 +119,7 @@ def smart_extract_price(text, ai_rules=None):
     hv = any(x in v_cat for x in ("가방", "지갑", "시계", "신발", "아우터", "코트", "패딩", "명품"))
     lo = 10 if (v_name and "돼지" in v_name) else (
         15 if any(x in v_cat for x in ("악세", "잡화", "반지", "목걸이", "귀걸이")) else 20)
-    hi = 50000 if hv else 5000
+    hi = 3500 if hv else 2000
 
     def _decode(n):
         s = str(n)

@@ -57,7 +57,9 @@ export default function ProductList({ products, onSelect, selectedIds = [], link
             </div>
             
             <div>
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-white line-clamp-2 leading-snug">{product.name}</h3>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-white line-clamp-2 leading-snug">
+                {isMasked ? "🔒 가입 후 확인 가능" : product.name}
+              </h3>
               <p className="text-xs text-slate-500 mt-1 uppercase">{product.category}</p>
               <div className="flex items-baseline gap-2 mt-2">
                 {isMasked ? (

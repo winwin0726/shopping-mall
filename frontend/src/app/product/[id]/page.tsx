@@ -254,7 +254,7 @@ export default function ProductDetailPage() {
           </Link>
           <ChevronRight size={14} />
           <span className="text-slate-800 dark:text-white font-medium truncate max-w-[200px]">
-            {product.name}
+            {isMasked ? "🔒 가입 후 확인 가능" : product.name}
           </span>
         </nav>
       </div>
@@ -305,15 +305,21 @@ export default function ProductDetailPage() {
             </div>
 
             {/* 상품명 */}
-            <InlineProductEditor
-              productId={product.id}
-              fieldName="kr_name"
-              initialValue={product.name}
-              className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight block"
-              onSuccess={(newVal) => setProduct(prev => prev ? { ...prev, name: newVal } : null)}
-            >
-              {product.name}
-            </InlineProductEditor>
+            {isMasked ? (
+              <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight block">
+                🔒 가입 후 확인 가능
+              </h1>
+            ) : (
+              <InlineProductEditor
+                productId={product.id}
+                fieldName="kr_name"
+                initialValue={product.name}
+                className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight block"
+                onSuccess={(newVal) => setProduct(prev => prev ? { ...prev, name: newVal } : null)}
+              >
+                {product.name}
+              </InlineProductEditor>
+            )}
 
             {/* 가격 */}
             <div className="flex items-end gap-4">
@@ -360,7 +366,7 @@ export default function ProductDetailPage() {
             {/* 요약 설명 */}
             <hr className="border-slate-200 dark:border-slate-700" />
 
-            {product.description && (
+            {product.description && !isMasked && (
               <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base">
                 {product.description}
               </p>
@@ -517,12 +523,7 @@ export default function ProductDetailPage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      if (isMasked) {
-                        alert("회원 승인이 필요한 기능입니다. (미가입 및 비로그인 상태는 사용이 불가능합니다.)");
-                        if (!user) router.push("/login");
-                        return;
-                      }
-                      setShowFitting(!showFitting);
+                      setIsVtonOpen(true);
                     }}
                     className="w-full py-4 rounded-2xl font-bold text-lg bg-gradient-to-r from-violet-600 to-blue-600 text-white flex items-center justify-center gap-3 shadow-xl shadow-violet-500/30 transition-all"
                   >
@@ -598,36 +599,46 @@ export default function ProductDetailPage() {
                 상품 상세 정보
               </h2>
               <div className="glass-panel rounded-3xl border border-white/40 shadow-xl p-8 lg:p-12 space-y-8">
-                {product.description_html ? (
-                  <div
-                    className="prose prose-slate dark:prose-invert max-w-none
-                      prose-img:rounded-xl prose-img:shadow-lg
-                      prose-headings:font-bold prose-a:text-blue-600"
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(product.description_html),
-                    }}
-                  />
-                ) : (
-                  <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base whitespace-pre-wrap">
-                    {product.description}
+                {isMasked ? (
+                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-base text-center py-12">
+                    🔒 회원가입 승인 후 상세 스펙 및 이미지 확인이 가능합니다.
                   </p>
-                )}
+                ) : (
+                  <>
+                    {product.description_html ? (
+                      <div
+                        className="prose prose-slate dark:prose-invert max-w-none
+                          prose-img:rounded-xl prose-img:shadow-lg
+                          prose-headings:font-bold prose-a:text-blue-600"
+                        dangerouslySetInnerHTML={{
+                          __html: DOMPurify.sanitize(product.description_html),
+                        }}
+                      />
+                    ) : (
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base whitespace-pre-wrap">
+                        {product.description}
+                      </p>
+                    )}
 
-                {/* 등록된 상품 이미지 자동 나열 */}
-                {product.images && product.images.length > 0 && (
-                  <div className="flex flex-col items-center gap-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest self-start mb-2">상세 이미지</p>
-                    {product.images.map((imgUrl, i) => (
-                      <div key={i} className="w-full max-w-3xl rounded-2xl overflow-hidden shadow-md border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-2">
-                        <img
-                          src={imgUrl}
-                          alt={`${product.name} 상세 이미지 ${i + 1}`}
-                          className="w-full h-auto object-contain rounded-xl"
-                          loading="lazy"
-                        />
+                    {/* 등록된 상품 이미지 자동 나열 */}
+                    {product.images && product.images.length > 0 && (
+                      <div className="flex flex-col items-center gap-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest self-start mb-2">상세 이미지</p>
+                        {product.images
+                          .filter(img => !img.includes("transparent") && !img.includes("item_") && !img.includes("vton") && !img.includes("tryon_"))
+                          .map((imgUrl, i) => (
+                            <div key={i} className="w-full max-w-3xl rounded-2xl overflow-hidden shadow-md border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-2">
+                              <img
+                                src={imgUrl}
+                                alt={`${product.name} 상세 이미지 ${i + 1}`}
+                                className="w-full h-auto object-contain rounded-xl"
+                                loading="lazy"
+                              />
+                            </div>
+                          ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             </motion.section>

@@ -1,5 +1,6 @@
 import asyncio
 import sys
+sys.path.insert(0, r"d:\에이전트그룹\LUXAI_ShoppingMall_20260605")
 
 # Windows stdout 인코딩 에러 방지
 if sys.platform == "win32":
@@ -15,10 +16,23 @@ async def test_translate_api():
     
     db = SessionLocal()
     try:
+        is_mock = False
         product = db.query(HQProduct).filter(HQProduct.id == 47).first()
         if not product:
-            print("Product 47 not found in DB")
-            return
+            print("⚠️ Product 47 not found in DB. Creating a mock product for testing...")
+            is_mock = True
+            # 가상의 카테고리 생성 및 모킹
+            from backend.models import Category
+            mock_cat = Category(name="가방", slug="bag", margin_type="percent", margin_value=20.0)
+            product = HQProduct(
+                id=47,
+                kr_name="로에베 가방",
+                cn_name="LOEWE BAG",
+                kr_description="로에베 가방 官网售价: 22695\n최고급 수입 양가죽으로 제작\n사이즈: 단일 사이즈 (29*19.5*12cm)",
+                wholesale_price=0,
+                category=mock_cat,
+                original_source_url="winwin://moi/bag-loewe-123"
+            )
             
         print("=== Before Translation ===")
         print(f"Name: {product.kr_name}")
@@ -56,8 +70,9 @@ async def test_translate_api():
                     product.category.margin_value
                 )
                 
-        db.commit()
-        db.refresh(product)
+        if not is_mock:
+            db.commit()
+            db.refresh(product)
         
         print("\n=== After Translation ===")
         print(f"Name: {product.kr_name}")

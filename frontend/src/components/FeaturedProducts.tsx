@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useTheme } from "@/components/ThemeProvider";
 import InlineProductEditor from "./InlineProductEditor";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FeaturedProductsProps {
   products: Product[];
@@ -14,6 +15,8 @@ interface FeaturedProductsProps {
 
 export default function FeaturedProducts({ products, onTryOn }: FeaturedProductsProps) {
   const { themeConfig } = useTheme();
+  const { user } = useAuth();
+  const isMasked = user === null || user.grade === 5;
   
   // 테마에 따른 그리드 열 개수 매핑
   const getGridColsClass = (cols: number | undefined) => {
@@ -105,7 +108,7 @@ export default function FeaturedProducts({ products, onTryOn }: FeaturedProducts
                     className="text-base font-bold text-slate-900 dark:text-white truncate"
                   >
                     <Link href={`/product/${product.id}`} className="hover:underline">
-                      {product.name}
+                      {isMasked ? "🔒 가입 후 확인 가능" : product.name}
                     </Link>
                   </InlineProductEditor>
                   <InlineProductEditor
@@ -115,7 +118,7 @@ export default function FeaturedProducts({ products, onTryOn }: FeaturedProducts
                     className="text-sm font-black mt-1 block"
                     style={{ color: themeConfig.primaryColor || "#2563eb" }}
                   >
-                    ₩{product.price.toLocaleString()}
+                    {isMasked ? "🔒 회원공개 가격" : `₩${product.price.toLocaleString()}`}
                   </InlineProductEditor>
                 </div>
               </div>
