@@ -149,14 +149,14 @@ export default function UsersTab() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">회원 정보 (이름/이메일)</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">가입 상태</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">보유 적립금</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">회원 등급 (Grade)</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">시스템 권한</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">가입일</th>
-                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right">혜택 관리</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">ID</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">회원 정보 (이름/이메일)</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">가입 상태</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">보유 적립금</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">회원 등급 (Grade)</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">시스템 권한</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">가입일</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-center">혜택 관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -178,23 +178,23 @@ export default function UsersTab() {
                   
                   return (
                     <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-slate-500">#{user.id}</td>
-                      <td className="p-4 font-medium text-slate-900">
-                        <div className="flex items-center space-x-2">
+                      <td className="p-4 text-slate-500 text-center">#{user.id}</td>
+                      <td className="p-4 font-medium text-slate-900 text-center">
+                        <div className="flex items-center justify-center space-x-2">
                           <UserIcon size={16} className="text-slate-400 flex-shrink-0" />
-                          <div>
+                          <div className="text-left">
                             <div className="font-semibold text-sm">{user.name || "이름 미입력"}</div>
                             <div className="text-xs text-slate-500">{user.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 text-center">
                         <span className={`px-2 py-1 rounded text-xs font-medium border ${user.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                           {user.is_active ? "활성" : "정지"}
                         </span>
                       </td>
-                      <td className="p-4 font-semibold text-amber-900">
-                        <div className="flex items-center space-x-2">
+                      <td className="p-4 font-semibold text-amber-900 text-center">
+                        <div className="flex items-center justify-center space-x-2">
                           <Coins size={14} className="text-amber-800" />
                           <span>{(user.reward_points || 0).toLocaleString()}원</span>
                           <button
@@ -205,8 +205,8 @@ export default function UsersTab() {
                           </button>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
                           <span className={`px-2 py-1 rounded text-xs font-bold border ${gradeInfo.bgClass} ${gradeInfo.textClass}`}>
                             {gradeInfo.label}
                           </span>
@@ -224,16 +224,16 @@ export default function UsersTab() {
                           </select>
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 text-center">
                         <span className={`px-2 py-1 rounded text-xs font-bold inline-flex items-center border ${user.role === 'ADMIN' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                           {user.role === 'ADMIN' ? <Shield size={12} className="mr-1 text-rose-600" /> : <ShieldOff size={12} className="mr-1 text-blue-600" />}
                           {user.role || "USER"}
                         </span>
                       </td>
-                      <td className="p-4 text-slate-500 text-sm">
+                      <td className="p-4 text-slate-500 text-sm text-center">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-center">
                         <button
                           onClick={() => handleIssueCoupon(user.id, user.name || user.email)}
                           className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1"

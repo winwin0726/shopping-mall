@@ -76,6 +76,9 @@ app.include_router(reviews_router, prefix="/api/reviews", tags=["Reviews"])
 app.include_router(support_router, prefix="/api/support", tags=["Support"])
 app.include_router(vton_router, prefix="/api/vton", tags=["VTON Pipeline"], dependencies=[Depends(get_current_user)])
 
+from backend.routers.category_sync import router as category_sync_router
+app.include_router(category_sync_router, prefix="/api/category-sync", tags=["CategorySync"], dependencies=[Depends(get_current_admin)])
+
 @app.get("/api/tenant/theme")
 def get_tenant_theme(domain: str = "hq.mall.com", db: Session = Depends(get_db)):
     # Remove port if present
