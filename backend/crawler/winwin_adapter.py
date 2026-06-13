@@ -148,7 +148,7 @@ def scrape_weishang_album_sync(
                 kr_description=raw_desc,
                 base_price=calculated_price,
                 images=web_images,
-                status="APPROVED"
+                status="PENDING"
             )
             
             if parsed_sizes:

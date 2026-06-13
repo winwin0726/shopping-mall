@@ -24,13 +24,21 @@ def get_my_wishlist(db: Session = Depends(get_db), current_user: User = Depends(
     for item in items:
         # Load associated product (eager-loaded — N+1 제거, F1)
         product = item.product
+        
+        image_url = None
+        if product:
+            if product.images and len(product.images) > 0:
+                image_url = product.images[0]
+            else:
+                image_url = product.ai_fitting_image_url
+
         result.append({
             "id": item.id,
             "product_id": item.product_id,
             "created_at": item.created_at,
             "product_name": product.kr_name if product else "Unknown Product",
             "product_price": product.sale_price if product and product.sale_price else (product.base_price if product else 0),
-            "product_image": product.ai_fitting_image_url if product else None
+            "product_image": image_url
         })
     return result
 

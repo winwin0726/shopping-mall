@@ -14,7 +14,18 @@ _connect_args = (
     if SQLALCHEMY_DATABASE_URL.startswith("sqlite")
     else {}
 )
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args)
+
+# 서버형 데이터베이스(MySQL, PostgreSQL)용 커넥션 풀 튜닝 옵션
+_pool_options = {}
+if not SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    _pool_options = {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_recycle": 3600,  # 1시간마다 커넥션 재생성 (DB 연결 끊김 방지)
+        "pool_pre_ping": True  # 커넥션 사용 전 살아있는지 핑 확인
+    }
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=_connect_args, **_pool_options)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

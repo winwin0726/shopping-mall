@@ -38,6 +38,9 @@ class UserUpdate(BaseModel):
     profile_image: Optional[str] = None
     password: Optional[str] = None
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
 # =======================
 # Cart & Wishlist Schemas
 # =======================

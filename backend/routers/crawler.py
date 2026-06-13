@@ -489,7 +489,7 @@ async def crawler_webhook(
         wholesale_price=wholesale_krw,  # [윈윈 도킹] 도매원가 보관 (마진 변경 시 재계산용)
         images=web_images,
         video_url=mapped.get("video_url"),
-        status="APPROVED",
+        status="PENDING",
     )
     if parsed_sizes:
         new_prod.size_stock_config = parsed_sizes
@@ -581,7 +581,7 @@ async def background_scrape_task(
                     base_price=base_price,
                     images=[image_url],
                     transparent_item_image_url=transparent_url,
-                    status="APPROVED"
+                    status="PENDING"
                 )
                 
                 if parsed_sizes:

@@ -216,7 +216,7 @@ export default function CategoryPage() {
     setSelectedBrand("전체");
   }, [products]);
 
-  const displayedProducts = selectedBrand === "전체"
+  const displayedProducts = (selectedBrand === "전체" || decodeSlug === "국내배송")
     ? products
     : products.filter((p: any) => p.brand_name === selectedBrand);
 
@@ -292,8 +292,8 @@ export default function CategoryPage() {
               ))}
             </motion.div>
           )}
-          {/* 브랜드별 교차 필터 칩 */}
-          {availableBrands.length > 2 && (
+          {/* 브랜드별 교차 필터 칩 (국내배송 카테고리에서는 브랜드 필터 비활성화) */}
+          {decodeSlug !== "국내배송" && availableBrands.length > 2 && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

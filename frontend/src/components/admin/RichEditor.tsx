@@ -91,9 +91,9 @@ interface RichEditorProps {
 
 const FONT_SIZES = ["12", "14", "16", "18", "20", "24", "28", "32", "40"];
 const TEXT_COLORS = [
-  { name: "기본 흰색", value: "#ffffff" },
-  { name: "연한 회색", value: "#cbd5e1" },
-  { name: "진한 회색", value: "#64748b" },
+  { name: "기본 검은색", value: "#0f172a" },
+  { name: "진한 회색", value: "#475569" },
+  { name: "연한 회색", value: "#94a3b8" },
   { name: "럭스 레드", value: "#ef4444" },
   { name: "럭스 블루", value: "#3b82f6" },
   { name: "에메랄드", value: "#10b981" },
@@ -103,11 +103,11 @@ const TEXT_COLORS = [
 
 const HIGHLIGHT_COLORS = [
   { name: "지우기", value: "transparent" },
-  { name: "옐로 형광", value: "#f59e0b" },
-  { name: "그린 형광", value: "#10b981" },
-  { name: "레드 형광", value: "#ef4444" },
-  { name: "블루 형광", value: "#3b82f6" },
-  { name: "퍼플 형광", value: "#8b5cf6" },
+  { name: "옐로 형광", value: "#fef08a" },
+  { name: "그린 형광", value: "#bbf7d0" },
+  { name: "레드 형광", value: "#fecaca" },
+  { name: "블루 형광", value: "#bfdbfe" },
+  { name: "퍼플 형광", value: "#ddd6fe" },
 ];
 
 export default function RichEditor({ value, onChange, placeholder }: RichEditorProps) {
@@ -121,17 +121,17 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
       StarterKit.configure({
         bulletList: {
           HTMLAttributes: {
-            class: "list-disc pl-5 my-2 space-y-1 text-slate-300",
+            class: "list-disc pl-5 my-2 space-y-1 text-slate-700",
           },
         },
         orderedList: {
           HTMLAttributes: {
-            class: "list-decimal pl-5 my-2 space-y-1 text-slate-300",
+            class: "list-decimal pl-5 my-2 space-y-1 text-slate-700",
           },
         },
         blockquote: {
           HTMLAttributes: {
-            class: "border-l-4 border-blue-500 bg-slate-900/50 pl-4 py-2 my-4 italic text-slate-400 rounded-r-lg",
+            class: "border-l-4 border-blue-500 bg-slate-50 pl-4 py-2 my-4 italic text-slate-600 rounded-r-lg",
           },
         },
       }),
@@ -148,29 +148,29 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
       Table.configure({
         resizable: true,
         HTMLAttributes: {
-          class: "w-full border-collapse border border-slate-700 my-4 rounded-lg overflow-hidden text-sm",
+          class: "w-full border-collapse border border-slate-200 my-4 rounded-lg overflow-hidden text-sm",
         },
       }),
       TableRow,
       TableHeader.configure({
         HTMLAttributes: {
-          class: "border border-slate-750 bg-slate-800 font-bold px-3 py-2 text-left text-slate-200",
+          class: "border border-slate-200 bg-slate-50 font-bold px-3 py-2 text-left text-slate-700",
         },
       }),
       TableCell.configure({
         HTMLAttributes: {
-          class: "border border-slate-750 bg-slate-900/40 px-3 py-2 text-slate-300",
+          class: "border border-slate-200 bg-white px-3 py-2 text-slate-600",
         },
       }),
       Image.configure({
         HTMLAttributes: {
-          class: "max-w-full h-auto rounded-xl my-4 border-2 border-slate-850 block mx-auto shadow-xl hover:scale-[1.01] transition-transform",
+          class: "max-w-full h-auto rounded-xl my-4 border border-slate-200 block mx-auto shadow-md hover:scale-[1.01] transition-transform",
         },
       }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: "text-blue-400 hover:text-blue-300 underline cursor-pointer font-medium",
+          class: "text-blue-600 hover:text-blue-500 underline cursor-pointer font-medium",
         },
       }),
     ],
@@ -190,7 +190,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
 
   if (!editor) {
     return (
-      <div className="w-full h-40 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 text-xs animate-pulse">
+      <div className="w-full h-40 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs animate-pulse">
         고성능 에디터 로딩 중...
       </div>
     );
@@ -243,7 +243,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
   };
 
   return (
-    <div className="w-full border border-slate-700 bg-slate-800 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:shadow-lg focus-within:shadow-blue-500/5 transition-all flex flex-col relative">
+    <div className="w-full border border-slate-200 bg-white rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:shadow-lg focus-within:shadow-blue-500/5 transition-all flex flex-col relative shadow-sm">
       {/* 테이블 스타일링을 위한 인라인 스타일 인젝션 */}
       <style>{`
         .tiptap-content table {
@@ -255,14 +255,14 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         }
         .tiptap-content td, .tiptap-content th {
           min-width: 1em;
-          border: 1px solid #334155;
+          border: 1px solid #e2e8f0;
           padding: 8px 12px;
           vertical-align: top;
           box-sizing: border-box;
           position: relative;
         }
         .tiptap-content th {
-          background-color: #1e293b;
+          background-color: #f8fafc;
           font-weight: bold;
           text-align: left;
         }
@@ -279,7 +279,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           padding-left: 1rem;
           margin: 1rem 0;
           font-style: italic;
-          color: #94a3b8;
+          color: #475569;
         }
       `}</style>
 
@@ -295,14 +295,14 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
       {/* ─────────────────────────────────────────────────────────────────────────────
           초고도화 툴바 레이아웃 (기능 카테고리별 정렬)
           ───────────────────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-900 border-b border-slate-700 shrink-0">
+      <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 border-b border-slate-200 shrink-0">
         
         {/* 그룹 1: 텍스트 기본 서식 */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-0.5 border border-slate-700">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-0.5 border border-slate-200 shadow-sm">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive("bold") ? "bg-slate-650 text-white font-bold" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive("bold") ? "bg-slate-100 text-slate-900 font-bold" : ""}`}
             title="굵게 (Ctrl+B)"
           >
             <Bold size={14} />
@@ -310,7 +310,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive("italic") ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive("italic") ? "bg-slate-100 text-slate-900" : ""}`}
             title="기울임 (Ctrl+I)"
           >
             <Italic size={14} />
@@ -318,7 +318,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive("underline") ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive("underline") ? "bg-slate-100 text-slate-900" : ""}`}
             title="밑줄 (Ctrl+U)"
           >
             <UnderlineIcon size={14} />
@@ -326,7 +326,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive("blockquote") ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive("blockquote") ? "bg-slate-100 text-slate-900" : ""}`}
             title="인용구 삽입"
           >
             <Quote size={14} />
@@ -334,8 +334,8 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 2: 폰트 크기 조절 (최고의 편의성) */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-1 border border-slate-700 text-xs">
-          <Type size={13} className="text-slate-400 ml-1" />
+        <div className="flex items-center bg-white p-1 rounded-lg gap-1 border border-slate-200 text-xs shadow-sm">
+          <Type size={13} className="text-slate-500 ml-1" />
           <select
             onChange={(e) => {
               const val = e.target.value;
@@ -345,7 +345,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
                 editor.chain().focus().setFontSize(val).run();
               }
             }}
-            className="bg-slate-900 text-slate-200 border border-slate-700 rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+            className="bg-white text-slate-700 border border-slate-200 rounded px-1 py-0.5 focus:outline-none cursor-pointer font-medium"
             title="폰트 크기 설정"
           >
             <option value="default">글자 크기 (기본)</option>
@@ -356,11 +356,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 3: 텍스트 정렬 */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-0.5 border border-slate-700">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-0.5 border border-slate-200 shadow-sm">
           <button
             type="button"
             onClick={() => editor.chain().focus().setTextAlign("left").run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive({ textAlign: "left" }) ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive({ textAlign: "left" }) ? "bg-slate-100 text-slate-900" : ""}`}
             title="왼쪽 정렬"
           >
             <AlignLeft size={14} />
@@ -368,7 +368,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().setTextAlign("center").run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive({ textAlign: "center" }) ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive({ textAlign: "center" }) ? "bg-slate-100 text-slate-900" : ""}`}
             title="가운데 정렬"
           >
             <AlignCenter size={14} />
@@ -376,7 +376,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().setTextAlign("right").run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive({ textAlign: "right" }) ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive({ textAlign: "right" }) ? "bg-slate-100 text-slate-900" : ""}`}
             title="오른쪽 정렬"
           >
             <AlignRight size={14} />
@@ -384,7 +384,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive({ textAlign: "justify" }) ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive({ textAlign: "justify" }) ? "bg-slate-100 text-slate-900" : ""}`}
             title="양방향 정렬"
           >
             <AlignJustify size={14} />
@@ -392,7 +392,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 4: 글자색 & 형광펜 강조 (팝업 셀렉터 기능 탑재) */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-1 border border-slate-700 relative">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-1 border border-slate-200 relative shadow-sm">
           {/* 글자색 단추 */}
           <button
             type="button"
@@ -400,11 +400,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               setShowColorPicker(!showColorPicker);
               setShowHighlightPicker(false);
             }}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-300 transition flex items-center gap-1"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition flex items-center gap-1"
             title="글자 색상 지정"
           >
             <Palette size={14} />
-            <span className="text-[10px] text-slate-400">색상</span>
+            <span className="text-[10px] text-slate-500 font-semibold">색상</span>
           </button>
 
           {/* 형광펜 단추 */}
@@ -414,16 +414,16 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               setShowHighlightPicker(!showHighlightPicker);
               setShowColorPicker(false);
             }}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-300 transition flex items-center gap-1"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition flex items-center gap-1"
             title="배경 강조색 지정"
           >
             <Highlighter size={14} />
-            <span className="text-[10px] text-slate-400">형광</span>
+            <span className="text-[10px] text-slate-500 font-semibold">형광</span>
           </button>
 
           {/* 텍스트 색상 팔레트 드롭다운 */}
           {showColorPicker && (
-            <div className="absolute top-9 left-0 bg-slate-900 border border-slate-700 rounded-xl p-2 z-30 grid grid-cols-4 gap-1.5 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="absolute top-9 left-0 bg-white border border-slate-200 rounded-xl p-2.5 z-30 grid grid-cols-4 gap-1.5 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
               {TEXT_COLORS.map((col) => (
                 <button
                   key={col.name}
@@ -432,7 +432,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
                     editor.chain().focus().setColor(col.value).run();
                     setShowColorPicker(false);
                   }}
-                  className="w-5 h-5 rounded-full border border-slate-800 hover:scale-110 active:scale-90 transition relative group"
+                  className="w-5 h-5 rounded-full border border-slate-200 hover:scale-110 active:scale-90 transition relative group shadow-sm"
                   style={{ backgroundColor: col.value }}
                   title={col.name}
                 >
@@ -445,7 +445,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
                   editor.chain().focus().unsetColor().run();
                   setShowColorPicker(false);
                 }}
-                className="col-span-4 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 rounded mt-1 font-bold"
+                className="col-span-4 text-[10px] bg-slate-50 hover:bg-slate-100 text-slate-700 py-1.5 rounded mt-1 font-bold border border-slate-200"
               >
                 기본 색상으로 재설정
               </button>
@@ -454,7 +454,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
 
           {/* 형광펜 강조색 팔레트 드롭다운 */}
           {showHighlightPicker && (
-            <div className="absolute top-9 left-14 bg-slate-900 border border-slate-700 rounded-xl p-2 z-30 grid grid-cols-3 gap-1.5 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="absolute top-9 left-14 bg-white border border-slate-200 rounded-xl p-2.5 z-30 grid grid-cols-3 gap-1.5 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
               {HIGHLIGHT_COLORS.map((col) => (
                 <button
                   key={col.name}
@@ -467,8 +467,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
                     }
                     setShowHighlightPicker(false);
                   }}
-                  className="w-6 h-6 rounded border border-slate-850 hover:scale-110 active:scale-90 transition flex items-center justify-center text-[8px] font-bold text-black"
-                  style={{ backgroundColor: col.value === "transparent" ? "#334155" : col.value, color: col.value === "transparent" ? "#cbd5e1" : "#000000" }}
+                  className="w-6 h-6 rounded border border-slate-200 hover:scale-110 active:scale-90 transition flex items-center justify-center text-[8px] font-black text-black shadow-sm"
+                  style={{ 
+                    backgroundColor: col.value === "transparent" ? "#f1f5f9" : col.value, 
+                    color: col.value === "transparent" ? "#475569" : "#000000" 
+                  }}
                   title={col.name}
                 >
                   {col.value === "transparent" ? "X" : "A"}
@@ -479,11 +482,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 5: 제목 (H1 ~ H3) */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-0.5 border border-slate-700">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-0.5 border border-slate-200 shadow-sm">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-[10px] text-slate-300 transition ${editor.isActive("heading", { level: 1 }) ? "bg-slate-650 text-white font-bold" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-[10px] text-slate-600 font-bold transition ${editor.isActive("heading", { level: 1 }) ? "bg-slate-100 text-slate-900 font-bold" : ""}`}
             title="대제목 (H1)"
           >
             H1
@@ -491,7 +494,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-[10px] text-slate-300 transition ${editor.isActive("heading", { level: 2 }) ? "bg-slate-650 text-white font-bold" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-[10px] text-slate-600 font-bold transition ${editor.isActive("heading", { level: 2 }) ? "bg-slate-100 text-slate-900 font-bold" : ""}`}
             title="중제목 (H2)"
           >
             H2
@@ -499,7 +502,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={`p-1.5 rounded hover:bg-slate-700 text-[10px] text-slate-300 transition ${editor.isActive("heading", { level: 3 }) ? "bg-slate-650 text-white font-bold" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-[10px] text-slate-600 font-bold transition ${editor.isActive("heading", { level: 3 }) ? "bg-slate-100 text-slate-900 font-bold" : ""}`}
             title="소제목 (H3)"
           >
             H3
@@ -507,11 +510,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 6: 하이퍼링크 & 이미지 추가 */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-0.5 border border-slate-700">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-0.5 border border-slate-200 shadow-sm">
           <button
             type="button"
             onClick={setLink}
-            className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 transition ${editor.isActive("link") ? "bg-slate-650 text-white" : ""}`}
+            className={`p-1.5 rounded hover:bg-slate-100 text-slate-600 transition ${editor.isActive("link") ? "bg-slate-100 text-blue-600" : ""}`}
             title="링크 걸기"
           >
             <Link2 size={14} />
@@ -520,7 +523,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
             <button
               type="button"
               onClick={() => editor.chain().focus().unsetLink().run()}
-              className="p-1.5 rounded hover:bg-slate-700 text-red-400 transition"
+              className="p-1.5 rounded hover:bg-slate-100 text-red-600 transition"
               title="링크 해제"
             >
               <Unlink size={14} />
@@ -529,7 +532,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
           <button
             type="button"
             onClick={() => !isUploading && fileInputRef.current?.click()}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-300 transition flex items-center gap-1"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition flex items-center gap-1"
             title="이미지 파일 직접 업로드 삽입"
             disabled={isUploading}
           >
@@ -538,11 +541,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 7: 스마트 표(Table) 삽입 및 편집기 기능 (업계 최고의 스펙 요약용) */}
-        <div className="flex items-center bg-slate-850 p-1 rounded-lg gap-1 border border-blue-500/25">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-1 border border-blue-500/20 shadow-sm">
           <button
             type="button"
             onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-            className="p-1.5 bg-blue-600/10 hover:bg-blue-600/30 text-blue-300 rounded transition flex items-center gap-1 text-[10px] font-bold"
+            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded transition flex items-center gap-1 text-[10px] font-bold shadow-sm"
             title="3x3 표(Table) 삽입"
           >
             <Table2 size={13} />
@@ -551,11 +554,11 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
 
           {/* 표 내부 포커싱 상태일 때 편집 도구 추가 노출 */}
           {editor.isActive("table") && (
-            <div className="flex items-center gap-0.5 border-l border-slate-700 pl-1.5 ml-0.5">
+            <div className="flex items-center gap-0.5 border-l border-slate-200 pl-1.5 ml-0.5">
               <button
                 type="button"
                 onClick={() => editor.chain().focus().addRowAfter().run()}
-                className="p-1.5 hover:bg-slate-700 text-emerald-400 rounded transition"
+                className="p-1.5 hover:bg-slate-50 text-emerald-600 rounded transition"
                 title="아래에 행 추가"
               >
                 <Plus size={12} />
@@ -564,7 +567,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               <button
                 type="button"
                 onClick={() => editor.chain().focus().addColumnAfter().run()}
-                className="p-1.5 hover:bg-slate-700 text-emerald-400 rounded transition"
+                className="p-1.5 hover:bg-slate-50 text-emerald-600 rounded transition"
                 title="우측에 열 추가"
               >
                 <Plus size={12} />
@@ -573,7 +576,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               <button
                 type="button"
                 onClick={() => editor.chain().focus().deleteRow().run()}
-                className="p-1.5 hover:bg-slate-700 text-red-400 rounded transition"
+                className="p-1.5 hover:bg-slate-50 text-red-600 rounded transition"
                 title="현재 행 삭제"
               >
                 <Minus size={12} />
@@ -582,7 +585,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               <button
                 type="button"
                 onClick={() => editor.chain().focus().deleteColumn().run()}
-                className="p-1.5 hover:bg-slate-700 text-red-400 rounded transition"
+                className="p-1.5 hover:bg-slate-50 text-red-600 rounded transition"
                 title="현재 열 삭제"
               >
                 <Minus size={12} />
@@ -591,7 +594,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
               <button
                 type="button"
                 onClick={() => editor.chain().focus().deleteTable().run()}
-                className="p-1.5 bg-red-950/20 hover:bg-red-950/50 text-red-500 rounded transition"
+                className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded transition font-semibold"
                 title="표 삭제"
               >
                 <Trash2 size={12} />
@@ -601,12 +604,12 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
         </div>
 
         {/* 그룹 8: 히스토리 백업 (실행 취소 / 다시 실행) */}
-        <div className="flex items-center bg-slate-800 p-1 rounded-lg gap-0.5 border border-slate-700 ml-auto">
+        <div className="flex items-center bg-white p-1 rounded-lg gap-0.5 border border-slate-200 ml-auto shadow-sm">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent transition"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition"
             title="실행 취소 (Ctrl+Z)"
           >
             <Undo size={14} />
@@ -615,7 +618,7 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
-            className="p-1.5 rounded hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent transition"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition"
             title="다시 실행 (Ctrl+Y)"
           >
             <Redo size={14} />
@@ -627,10 +630,10 @@ export default function RichEditor({ value, onChange, placeholder }: RichEditorP
       {/* ─────────────────────────────────────────────────────────────────────────────
           에디터 바디 (수려한 스타일링 적용)
           ───────────────────────────────────────────────────────────────────────────── */}
-      <div className="p-5 flex-1 min-h-[220px] max-h-[350px] overflow-y-auto bg-slate-900/65 text-slate-100 text-sm focus:outline-none">
+      <div className="p-5 flex-1 min-h-[220px] max-h-[350px] overflow-y-auto bg-white text-slate-900 text-sm focus:outline-none">
         <EditorContent
           editor={editor}
-          className="tiptap-content prose prose-sm prose-invert focus:outline-none max-w-none min-h-[180px] leading-relaxed"
+          className="tiptap-content prose prose-sm focus:outline-none max-w-none min-h-[180px] leading-relaxed text-slate-800"
         />
       </div>
     </div>

@@ -220,6 +220,27 @@ def shutdown():
     threading.Thread(target=kill_self, daemon=True).start()
     return {"status": "success", "message": "shutting down..."}
 
+def _safe_genai_client(api_key: str):
+    import os
+    from google import genai
+    api_key_str = str(api_key).strip()
+    # 만약 JSON 파일 경로이면 Vertex AI 모드로 클라이언트 기동
+    if api_key_str.endswith(".json") and os.path.exists(api_key_str):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = api_key_str
+        return genai.Client(vertexai=True, project="crawlerwin", location="us-central1")
+    return genai.Client(api_key=api_key_str)
+
+def _safe_gemini_model(api_key: str, default_model: str) -> str:
+    import os
+    api_key_str = str(api_key).strip()
+    if api_key_str.endswith(".json") and os.path.exists(api_key_str):
+        if "pro" in default_model:
+            return "gemini-2.5-pro"
+        return "gemini-2.5-flash"
+    if "pro" in default_model:
+        return "gemini-2.5-pro"
+    return "gemini-3.5-flash"
+
 # 기본 상태 테스트 (루트)
 @app.get("/api/status")
 def read_status():
@@ -864,7 +885,7 @@ def get_style_analysis(category: str):
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        client = _safe_genai_client(api_key)
 
         analysis_prompt = f"""아래는 한국 B2B 패션 도매 판매자의 카카오스토리 포스팅에서 AI가 추출한 '스타일 지침서' 원문입니다.
 이 지침서를 분석하여 아래 JSON 구조로 정확하게 변환해주세요.
@@ -892,7 +913,7 @@ def get_style_analysis(category: str):
 7. key_patterns: 핵심 패턴 키워드 배열 (최대 6개, 이 판매자만의 특징적 패턴)"""
 
         res = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=_safe_gemini_model(api_key, 'gemini-2.5-flash'),
             contents=[analysis_prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -1711,7 +1732,7 @@ def _generate_ai_learning_analysis_payload(products: list, telemetry_events: lis
     import json
     from google import genai
 
-    client = genai.Client(api_key=api_key)
+    client = _safe_genai_client(api_key)
     compact_products = _compact_products_for_ai_analysis(products, limit=product_limit)
     compact_telemetry = []
     for event in (telemetry_events or [])[:telemetry_limit]:
@@ -1835,7 +1856,7 @@ def _generate_ai_learning_analysis_payload(products: list, telemetry_events: lis
 """
 
     res = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=_safe_gemini_model(api_key, "gemini-2.5-flash"),
         contents=prompt,
         config={"temperature": 0.15}
     )
@@ -2381,7 +2402,7 @@ def apply_dynamic_ai_rules(req: AnalyzeResultRequest):
 
     try:
         from google import genai
-        client = genai.Client(api_key=api_key)
+        client = _safe_genai_client(api_key)
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         override_file = os.path.join(base_dir, "ai_dynamic_overrides.json")
@@ -2679,7 +2700,7 @@ _meta 키는 건드리지 마세요.
         try:
             try:
                 res = client.models.generate_content(
-                    model='gemini-2.5-pro',
+                    model=_safe_gemini_model(api_key, 'gemini-2.5-pro'),
                     contents=prompt,
                     config={
                         "temperature": 0.15,
@@ -3867,7 +3888,7 @@ def _run_minimal_ai_final_review(product, api_key):
     try:
         from google import genai
         from google.genai import types
-        client = genai.Client(api_key=api_key)
+        client = _safe_genai_client(api_key)
         prompt = f"""
 너는 쇼핑몰 업로드 전 최종 검토자다. 비용 절감을 위해 오직 텍스트만 확인한다.
 아래 상품의 한국어 제목/본문이 중국어 그대로 남았거나 이상하면 자연스럽게 최소 수정하라.
@@ -3882,7 +3903,7 @@ def _run_minimal_ai_final_review(product, api_key):
 {{"title":"수정 제목 또는 기존 제목", "raw_description":"수정 본문 또는 기존 본문", "reason":"짧은 수정 이유"}}
 """
         res = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model=_safe_gemini_model(api_key, "gemini-2.5-flash-lite"),
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -4465,7 +4486,7 @@ def translate_manual(req: TranslateManualRequest):
                         pass
 
         from google import genai
-        client = genai.Client(api_key=api_key.strip())
+        client = _safe_genai_client(api_key)
         # --- 카테고리별 사이즈 규칙 동적 할당 ---
         cat_lower = final_category.lower()
         if any(k in cat_lower for k in ["신발", "슬리퍼", "샌들", "스니커즈", "부츠", "로퍼", "뮬"]):
@@ -4570,7 +4591,7 @@ def translate_manual(req: TranslateManualRequest):
 {req.raw_text}"""
 
         res = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model=_safe_gemini_model(api_key, 'gemini-2.5-flash-lite'),
             contents=[prompt],
             config={"response_mime_type": "application/json", "response_schema": {
                 "type": "OBJECT",

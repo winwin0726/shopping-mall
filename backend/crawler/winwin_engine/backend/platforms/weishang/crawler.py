@@ -111,9 +111,47 @@ class WeishangCrawler:
         self.telemetry_func = telemetry_func
         self.auth_state_path = "auth_state.json"
 
-        # →  ThreadPool: ?대?吏 ?ㅼ슫濡쒕뱶(I/O bound) 蹂묐젹 泥섎━
-
+        # [추가] Playwright 리소스 참조를 위한 인스턴스 변수 정의
+        self.playwright_mgr = None
+        self.browser = None
+        self.context = None
+        self.page = None
         self._img_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="img_dl")
+
+    def close_browser(self):
+        """Playwright 브라우저 및 관련 리소스를 세포 단위로 안전하게 정리합니다."""
+        try:
+            if self.page:
+                self.page.close()
+        except Exception:
+            pass
+        finally:
+            self.page = None
+
+        try:
+            if self.context:
+                self.context.close()
+        except Exception:
+            pass
+        finally:
+            self.context = None
+
+        try:
+            if self.browser:
+                self.browser.close()
+        except Exception:
+            pass
+        finally:
+            self.browser = None
+
+        try:
+            if self.playwright_mgr:
+                self.playwright_mgr.stop()
+        except Exception:
+            pass
+        finally:
+            self.playwright_mgr = None
+        self.add_log("🧹 Playwright 브라우저 및 자원 정리 완료", "INFO")
 
 
 
@@ -479,56 +517,84 @@ class WeishangCrawler:
 
 
         def _verify_same_product_visually(img_url_1, img_url_2):
-
             if not translator:
-
                 return None
 
             try:
-
                 import requests
-
                 import os
-
                 from google.genai import types
-
                 
-
                 def _get_image_bytes(url):
-
                     if not str(url).startswith("http"):
-
                         if os.path.exists(url):
-
                             with open(url, "rb") as f:
-
                                 return f.read()
-
                         return None
-
                     try:
-
                         r = requests.get(url, timeout=5)
-
                         if r.status_code == 200:
-
                             return r.content
-
                     except: pass
-
                     return None
 
-
-
                 img1_bytes = _get_image_bytes(img_url_1)
-
                 img2_bytes = _get_image_bytes(img_url_2)
-
                 
-
                 if not img1_bytes or not img2_bytes:
-
                     return True
+
+                # --- [고도화] 로컬 dHash 이미지 대조 가드 추가 ---
+                def _calculate_dhash(img_bytes):
+                    try:
+                        from PIL import Image
+                        import io
+                        img = Image.open(io.BytesIO(img_bytes))
+                        # 9x8 리사이즈 및 그레이스케일 변환
+                        img = img.convert('L').resize((9, 8), Image.Resampling.LANCZOS)
+                        pixels = list(img.getdata())
+                        
+                        difference = []
+                        for row in range(8):
+                            for col in range(8):
+                                pixel_left = pixels[row * 9 + col]
+                                pixel_right = pixels[row * 9 + col + 1]
+                                difference.append(pixel_left > pixel_right)
+                                
+                        decimal_value = 0
+                        hex_string = []
+                        for index, value in enumerate(difference):
+                            if value:
+                                decimal_value += 2 ** (index % 8)
+                            if (index % 8) == 7:
+                                hex_string.append(hex(decimal_value)[2:].zfill(2))
+                                decimal_value = 0
+                        return "".join(hex_string)
+                    except Exception as he:
+                        self.add_log(f"  ⚠️ [로컬 해시 오류] {he}", "WARNING")
+                        return None
+
+                def _hamming_distance(hash1, hash2):
+                    if not hash1 or not hash2 or len(hash1) != len(hash2):
+                        return 99
+                    val1 = int(hash1, 16)
+                    val2 = int(hash2, 16)
+                    return bin(val1 ^ val2).count('1')
+
+                hash1 = _calculate_dhash(img1_bytes)
+                hash2 = _calculate_dhash(img2_bytes)
+                
+                if hash1 and hash2:
+                    dist = _hamming_distance(hash1, hash2)
+                    self.add_log(f"  👁️ [로컬 해시 대조] 해밍 거리: {dist} (지문1: {hash1}, 지문2: {hash2})", "INFO")
+                    
+                    if dist <= 5:
+                        self.add_log(f"  ✅ [로컬 판정] 완전히 동일한 상품 이미지 확정 (해밍 거리: {dist}) - AI 호출 생략", "INFO")
+                        return True
+                    elif dist >= 16:
+                        self.add_log(f"  ❌ [로컬 판정] 서로 다른 상품 이미지 확정 (해밍 거리: {dist}) - AI 호출 생략", "INFO")
+                        return False
+                    # 6 ~ 15 사이일 경우에만 애매하므로 아래 비전 AI API로 최종 검증
 
                 prompt = "두 이미지를 정밀 비교해줘. 이 두 사진은 '동일한 상품'의 각도/색상/모델착용 여부만 다른 사진이야? [판단 기준] 1. 옷의 기본 종류(형태)나 폼팩터(지퍼 유무, 넥라인 등)가 다르면 무조건 '아니오'. 2. 찍는 방향, 거리, 명암(빛)은 미세하게 달라도 괜찮아. 3. 핵심은 [같은 배경 느낌]에서 촬영되었으며, 옷의 [같은 모양, 같은 로고, 같은 패턴(무늬)]을 가졌는지야. 이 핵심 조건들이 일치하고 완전히 동일한 디자인의 상품이 확실할 때만 '예'라고만 대답해."
 
@@ -625,15 +691,11 @@ class WeishangCrawler:
 
 
         try:
+            self.playwright_mgr = sync_playwright().start()
+            self.add_log("[1] 웨이상 크롬 엔진(Playwright)을 시작합니다.")
+            has_auth = os.path.exists(self.auth_state_path)
 
-            with sync_playwright() as p:
-
-                self.add_log("[1] 웨이상 크롬 엔진(Playwright)을 시작합니다.")
-
-                has_auth = os.path.exists(self.auth_state_path)
-
-
-
+            if True:
                 import random as _rnd
 
                 # 봇 감지 회피: 실제 브라우저에 가까운 User-Agent 풀 사용
@@ -708,15 +770,11 @@ class WeishangCrawler:
 
 
 
-                browser = p.chromium.launch(
-
-
-
+                self.browser = self.playwright_mgr.chromium.launch(
                     headless=False,
-
                     args=_launch_args
-
                 )
+                browser = self.browser
 
 
 
@@ -747,20 +805,14 @@ class WeishangCrawler:
 
 
                 if has_auth:
-
                     self.add_log("[1-2] 기존에 저장된 웨이상 로그인(세션) 정보를 불러옵니다.")
-
-                    context = browser.new_context(storage_state=self.auth_state_path, **_ctx_args)
-
+                    self.context = self.browser.new_context(storage_state=self.auth_state_path, **_ctx_args)
                 else:
-
                     self.add_log("[1-2] ⚠️ 저장된 웨이상 로그인 정보가 없습니다.")
-
-                    context = browser.new_context(**_ctx_args)
-
-
-
-                page = context.new_page()
+                    self.context = self.browser.new_context(**_ctx_args)
+                context = self.context
+                self.page = self.context.new_page()
+                page = self.page
 
 
 
@@ -1442,6 +1494,24 @@ class WeishangCrawler:
 
                     def _extract_price(text, v_name, v_cat, ai_rules):
                         if ai_rules.get("has_price") is False: return "0"
+                        
+                        def pre_clean_product_codes(raw_text: str) -> str:
+                            clean_text = raw_text
+                            clean_text = re.sub(
+                                r'(?:货号|款号|编号|sku|搜索码|搜素码)\s*[:：-]?\s*[A-Za-z0-9_-]{5,15}',
+                                '[PRODUCT_CODE]',
+                                clean_text,
+                                flags=re.IGNORECASE
+                            )
+                            clean_text = re.sub(
+                                r'\b\d{7,}\b',
+                                '[LONG_NUMBER]',
+                                clean_text
+                            )
+                            return clean_text
+                        
+                        text = pre_clean_product_codes(text)
+                        
                         _custom_price_regex = ai_rules.get("price_regex", "")
                         _price_decoder = ai_rules.get("price_decoder", "")
                         _price_offset = ai_rules.get("price_offset", 0)
@@ -1461,7 +1531,7 @@ class WeishangCrawler:
                             "emoji_symbol": r'(¥|￥|💰|💵|💸|💴|💲|🪙|🏷️|🛍️|元|块|价|现价|特价|活动价|折后价)[ \t]*[:：-]*[ \t]*([\d\.,]+)',
                             "alpha_code": r'(?:^|\s|[^A-Za-z0-9])([A-Za-z]{1,4})[-:_\t ]*(\d{3,4})(?:$|\s|[^A-Za-z0-9])',
                             "date_code": r'(?:^|\s|[^A-Za-z0-9])(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(\d{3,4})(?:$|\s|[^A-Za-z0-9])',
-                            "suffix_code": r'\b(\d{2,4})[ \t]*(元|块|起)\b',
+                            "suffix_code": r'\b(\d{2,4})[ \t]*(?:元|块|起)\b',
                             "fallback_num": r'(?:^|\s|[^A-Za-z0-9])(\d{2,4})(?:$|\s|[^A-Za-z0-9])'
                         }
                         
@@ -1710,21 +1780,12 @@ class WeishangCrawler:
                             # QR肄붾뱶, 怨듭쑀 珥덈?, → ?띾낫, ?꾩콟 ?꾩슜 UI ?띿뒪장) ?멸낏?곸씤 怨듭?/?띾낫 →
 
                             absolute_blacklist = [
-
-                                "二维码", "扫码", "扫一扫", "分享", "转发朋友圈",
-
-                                "相册分享", "我的相册", "秘密基地", "微商相册",
-
-                                "不要", "文字", "图文",
-
+                                "二维码", "扫码", "扫一扫", "转发朋友圈",
+                                "秘密基地",
                                 "加微信", "加我", "联系方式",
-
                                 "关注", "点赞", "收藏", "评论",
-
                                 "接单", "物流", "火龙",
-
                                 "特价福利", "优惠活动", "活动来袭", "年终馈赠"
-
                             ]
 
 
@@ -3808,7 +3869,7 @@ class WeishangCrawler:
                 self.add_log(f"⚠️ 에러 캡처 실패: {dmp_err}", "WARNING")
 
         finally:
-
+            self.close_browser()
             self._shutdown_pools()
 
 
@@ -3832,30 +3893,12 @@ class WeishangCrawler:
 
 
         try:
-
-
-
-            with sync_playwright() as p:
-
-
-
-                self.add_log("[동기화] 웨이상 팔로우 피드에서 상점 목록 추출 시작...")
-
-
-
-                has_auth = os.path.exists(self.auth_state_path)
-
-
-
-                if not has_auth:
-
-
-
-                    self.add_log("❌ 저장된 로그인 정보가 없습니다. 먼저 계정을 연결해주세요.", "ERROR")
-
-
-
-                    return []
+            self.playwright_mgr = sync_playwright().start()
+            self.add_log("[동기화] 웨이상 팔로우 피드에서 상점 목록 추출 시작...")
+            has_auth = os.path.exists(self.auth_state_path)
+            if not has_auth:
+                self.add_log("❌ 저장된 로그인 정보가 없습니다. 먼저 계정을 연결해주세요.", "ERROR")
+                return []
 
 
 
@@ -3863,59 +3906,25 @@ class WeishangCrawler:
 
 
 
-                browser = p.chromium.launch(
-
-
-
+                self.browser = self.playwright_mgr.chromium.launch(
                     headless=False,
-
-
-
                     args=[
-
-
-
-                        "--no-sandbox", 
-
-
-
+                        "--no-sandbox",
                         "--disable-blink-features=AutomationControlled",
-
-
-
                         "--disable-features=ProtocolHandlerRegistry,WindowManagement,LocalFonts",
-
-
-
                         "--disable-notifications",
-
-
-
                         "--disable-popup-blocking"
-
-
-
                     ]
-
-
-
                 )
+                browser = self.browser
 
 
 
-                context = browser.new_context(
-
-
-
+                self.context = self.browser.new_context(
                     storage_state=self.auth_state_path,
-
-
-
                     viewport={"width": 1280, "height": 800}
-
-
-
                 )
+                context = self.context
 
 
 
@@ -3967,7 +3976,8 @@ class WeishangCrawler:
 
 
 
-                page = context.new_page()
+                self.page = self.context.new_page()
+                page = self.page
 
 
 
@@ -4220,12 +4230,11 @@ class WeishangCrawler:
 
 
         except Exception as e:
-
             self.add_log(f"❌ 상점 정보 동기화 중 오류: {e}", "ERROR")
-
             self.add_log(traceback.format_exc(), "ERROR")
-
             return []
+        finally:
+            self.close_browser()
 
 
 
@@ -4258,35 +4267,25 @@ class WeishangCrawler:
         
 
         try:
+            from playwright.sync_api import sync_playwright
+            self.playwright_mgr = sync_playwright().start()
+            has_auth = os.path.exists(self.auth_state_path)
+            if not has_auth:
+                self.add_log("❌ [AI 프로파일러] 로그인 세션(auth_state.json)이 없습니다. 로그인이 필요합니다.", "ERROR")
+                return ""
 
-            with sync_playwright() as p:
+            self.browser = self.playwright_mgr.chromium.launch(headless=False, args=["--no-sandbox", "--window-size=400,600", "--window-position=-32000,-32000"])
+            browser = self.browser
+            self.context = browser.new_context(storage_state=self.auth_state_path)
+            context = self.context
+            self.page = context.new_page()
+            page = self.page
 
-                has_auth = os.path.exists(self.auth_state_path)
+            self.add_log(f"🚀 [AI 프로파일러] 업체 URL 진입: {vendor_url}")
+            page.goto(vendor_url, timeout=60000, wait_until="networkidle")
+            self.add_log("✅ 페이지 접속 완료, 스크롤링 및 데이터 수집 시작...")
 
-                if not has_auth:
-
-                    self.add_log("❌ [AI 프로파일러] 로그인 세션(auth_state.json)이 없습니다. 로그인이 필요합니다.", "ERROR")
-
-                    return ""
-
-
-
-                browser = p.chromium.launch(headless=False, args=["--no-sandbox", "--window-size=400,600", "--window-position=-32000,-32000"])
-
-                context = browser.new_context(storage_state=self.auth_state_path)
-
-                page = context.new_page()
-
-
-
-                self.add_log(f"🚀 [AI 프로파일러] 업체 URL 진입: {vendor_url}")
-
-                page.goto(vendor_url, timeout=60000, wait_until="networkidle")
-
-                self.add_log("✅ 페이지 접속 완료, 스크롤링 및 데이터 수집 시작...")
-
-
-
+            if True:
                 # ?쒗뵆由장)꾪솚 ?쒕∼?ㅼ슫 踰꾪듉 ?꾨Ⅴ湲?(紐⑸줉酉? 
 
                 try:
@@ -4568,12 +4567,11 @@ class WeishangCrawler:
 
 
         except Exception as e:
-
             self.add_log(f"❌ 프로파일링 중 오류: {e}", "ERROR")
-
             self.add_log(traceback.format_exc(), "ERROR")
-
             return ""
+        finally:
+            self.close_browser()
 
 
 

@@ -26,6 +26,26 @@ export default function AdminDashboard() {
   const [adminEmail, setAdminEmail] = useState("");
   const [authState, setAuthState] = useState<"checking" | "authorized" | "denied">("checking");
 
+  // URL Query Parameter에서 초기 탭 설정 동기화
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
+
+  const handleTabChange = (tabName: string) => {
+    setActiveTab(tabName);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tabName);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  };
+
   // 관리자 권한 가드: 백엔드 JWT 검증 후 role === "ADMIN" 인 경우에만 접근 허용
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -69,16 +89,16 @@ export default function AdminDashboard() {
 
   if (authState === "checking") {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950 text-slate-300">
+      <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-700">
         권한 확인 중…
       </div>
     );
   }
   if (authState === "denied") {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-slate-950 text-slate-300 gap-3">
-        <p className="text-lg font-bold text-white">관리자 권한이 필요합니다</p>
-        <p className="text-sm text-slate-400">로그인 페이지로 이동합니다…</p>
+      <div className="flex h-screen flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3">
+        <p className="text-lg font-bold text-slate-950">관리자 권한이 필요합니다</p>
+        <p className="text-sm text-slate-500">로그인 페이지로 이동합니다…</p>
       </div>
     );
   }
@@ -86,10 +106,10 @@ export default function AdminDashboard() {
   const SidebarItem = ({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) => (
     <button
       onClick={onClick}
-      className={`flex items-center w-full px-6 py-3 text-sm font-medium transition-colors ${
+      className={`flex items-center w-full px-4 py-3 text-sm font-medium transition-colors ${
         active 
           ? "bg-blue-600/10 text-blue-500 border-r-4 border-blue-500" 
-          : "text-slate-400 hover:text-white hover:bg-slate-800/50 border-r-4 border-transparent"
+          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 border-r-4 border-transparent"
       }`}
     >
       <span className="mr-3">{icon}</span>
@@ -98,17 +118,17 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-300 font-sans">
+    <div className="flex h-screen bg-slate-50 text-slate-700 font-sans">
       {/* 1. Left Sidebar (LNB) */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-slate-800 shrink-0">
-          <h1 className="text-xl font-bold text-white flex items-center tracking-tight">
+      <aside className="w-52 bg-white border-r border-slate-200 flex flex-col">
+        <div className="h-16 flex items-center px-4 border-b border-slate-200 shrink-0">
+          <h1 className="text-xl font-bold text-slate-900 flex items-center tracking-tight">
             {tenant?.theme_config?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={tenant.theme_config.logoUrl}
                 alt="Logo"
-                className="w-8 h-8 rounded-full object-cover mr-2.5 border border-slate-700 bg-white"
+                className="w-8 h-8 rounded-full object-cover mr-2.5 border border-slate-200 bg-white"
               />
             ) : (
               <Zap className="text-blue-500 mr-2" size={24} />
@@ -117,19 +137,19 @@ export default function AdminDashboard() {
           </h1>
         </div>
         <nav className="py-4 space-y-1 flex-1 overflow-y-auto">
-          <SidebarItem icon={<Box />} label="AI 자동화 파이프라인" active={activeTab === "pipeline"} onClick={() => setActiveTab("pipeline")} />
-          <SidebarItem icon={<BarChart3 />} label="대시보드" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-          <SidebarItem icon={<Tags />} label="카테고리 관리" active={activeTab === "categories"} onClick={() => setActiveTab("categories")} />
-          <SidebarItem icon={<Package />} label="상품 관리" active={activeTab === "products"} onClick={() => setActiveTab("products")} />
-          <SidebarItem icon={<UserCog />} label="회원 관리" active={activeTab === "users"} onClick={() => setActiveTab("users")} />
-          <SidebarItem icon={<CreditCard />} label="결제 및 주문현황" active={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
-          <SidebarItem icon={<Users />} label="테넌트 설정" active={activeTab === "tenants"} onClick={() => setActiveTab("tenants")} />
-          <SidebarItem icon={<Palette />} label="디자인 설정" active={activeTab === "design"} onClick={() => setActiveTab("design")} />
-          <SidebarItem icon={<MessageSquare />} label="1:1 문의 관리" active={activeTab === "support"} onClick={() => setActiveTab("support")} />
-          <Link href="/" className="flex items-center w-full px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 border-r-4 border-transparent transition-colors">
+          <SidebarItem icon={<Box />} label="AI 자동화 파이프라인" active={activeTab === "pipeline"} onClick={() => handleTabChange("pipeline")} />
+          <SidebarItem icon={<BarChart3 />} label="대시보드" active={activeTab === "overview"} onClick={() => handleTabChange("overview")} />
+          <SidebarItem icon={<Tags />} label="카테고리 관리" active={activeTab === "categories"} onClick={() => handleTabChange("categories")} />
+          <SidebarItem icon={<Package />} label="상품 관리" active={activeTab === "products"} onClick={() => handleTabChange("products")} />
+          <SidebarItem icon={<UserCog />} label="회원 관리" active={activeTab === "users"} onClick={() => handleTabChange("users")} />
+          <SidebarItem icon={<CreditCard />} label="결제 및 주문현황" active={activeTab === "orders"} onClick={() => handleTabChange("orders")} />
+          <SidebarItem icon={<Users />} label="테넌트 설정" active={activeTab === "tenants"} onClick={() => handleTabChange("tenants")} />
+          <SidebarItem icon={<Palette />} label="디자인 설정" active={activeTab === "design"} onClick={() => handleTabChange("design")} />
+          <SidebarItem icon={<MessageSquare />} label="1:1 문의 관리" active={activeTab === "support"} onClick={() => handleTabChange("support")} />
+          <Link href="/" className="flex items-center w-full px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 border-r-4 border-transparent transition-colors">
             <Home size={18} className="mr-3 text-blue-500" /> 쇼핑몰 홈으로 가기
           </Link>
-          <button onClick={handleLogout} className="flex items-center w-full px-6 py-3 text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/20 border-r-4 border-transparent transition-colors">
+          <button onClick={handleLogout} className="flex items-center w-full px-4 py-3 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 border-r-4 border-transparent transition-colors">
             <LogOut size={18} className="mr-3 text-red-500/80" /> 로그아웃
           </button>
         </nav>
@@ -139,8 +159,8 @@ export default function AdminDashboard() {
       {/* 2. Main Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Top Header */}
-        <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
-          <h2 className="text-lg font-semibold text-white">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+          <h2 className="text-lg font-semibold text-slate-900">
             {activeTab === "overview" && "대시보드"}
             {activeTab === "pipeline" && "AI 파이프라인"}
             {activeTab === "categories" && "카테고리 관리"}
@@ -153,8 +173,8 @@ export default function AdminDashboard() {
           </h2>
           <div className="flex items-center space-x-4">
             <div className="text-sm">
-              <span className="text-slate-400 mr-2">Logged in as</span>
-              <span className="text-white font-medium">{adminEmail || "Admin"}</span>
+              <span className="text-slate-500 mr-2">Logged in as</span>
+              <span className="text-slate-800 font-medium">{adminEmail || "Admin"}</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
               {adminEmail?.charAt(0).toUpperCase() || "A"}
@@ -163,7 +183,7 @@ export default function AdminDashboard() {
         </header>
 
         {/* Scrollable Work Area */}
-        <div className="flex-1 overflow-auto p-8 bg-slate-950">
+        <div className="flex-1 overflow-auto p-8 bg-slate-50">
           {activeTab === "overview" && <OverviewTab />}
           {activeTab === "pipeline" && <PipelineTab />}
           {activeTab === "categories" && <CategoriesTab />}

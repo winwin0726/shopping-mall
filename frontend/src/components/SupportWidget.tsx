@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 import { 
-  MessageSquare, X, Send, Clock, CheckCircle2, Loader2, LogIn, HelpCircle, ArrowRight
+  MessageSquare, X, Send, Clock, CheckCircle2, Loader2, LogIn, HelpCircle, ArrowRight, Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +24,7 @@ export default function SupportWidget() {
   const apiUrl = API_URL;
   const { user } = useAuth();
   const { themeConfig, tenantName } = useTheme();
+  const isVtonEnabled = themeConfig.features?.enable_vton !== false;
   
   const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -100,6 +101,23 @@ export default function SupportWidget() {
 
   return (
     <div className="fixed top-1/2 right-6 -translate-y-1/2 z-[9999] font-sans flex flex-col items-end gap-3">
+      {/* AI Fitting Floating Circle Button */}
+      {!isOpen && isVtonEnabled && (
+        <button
+          onClick={() => {
+            alert("곧 구현될 예정입니다.");
+          }}
+          className="w-14 h-14 text-white rounded-full flex flex-col items-center justify-center shadow-2xl hover:scale-105 transition-all duration-300 relative group border border-white/10"
+          style={{
+            backgroundImage: `linear-gradient(135deg, ${themeConfig.primaryColor || '#2563eb'}, ${themeConfig.secondaryColor || '#4f46e5'})`
+          }}
+          title="AI 가상 피팅룸"
+        >
+          <Sparkles size={20} className="text-yellow-300 animate-pulse" />
+          <span className="text-[9px] font-black tracking-tighter uppercase leading-none mt-1">Fitting</span>
+        </button>
+      )}
+
       {/* Floating Circle Button */}
       {!isOpen && (
         <button

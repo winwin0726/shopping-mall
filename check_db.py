@@ -25,8 +25,12 @@ try:
             
         # 테이블 내에 실제로 어떤 데이터들이 있는지 전체 조회
         tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
-        print("\n--- DB Tables ---")
+        print("\n--- DB Tables & Counts ---")
         for table in tables:
-            print(table[0])
+            tname = table[0]
+            if tname == 'sqlite_sequence':
+                continue
+            cnt = conn.execute(text(f"SELECT COUNT(*) FROM {tname}")).scalar()
+            print(f"Table: {tname} | Count: {cnt}")
 except Exception as e:
     print(f"❌ DB Query Failed: {e}")

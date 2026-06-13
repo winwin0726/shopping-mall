@@ -68,13 +68,13 @@ from backend.routers.support import router as support_router
 from backend.routers.vton import router as vton_router
 
 app.include_router(orders_router, prefix="/api/orders", tags=["Orders"])
-app.include_router(upload_router, prefix="/api/admin/upload", tags=["Uploads"], dependencies=[Depends(get_current_user)])
+app.include_router(upload_router, prefix="/api/admin/upload", tags=["Uploads"], dependencies=[Depends(get_current_admin)])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(wishlist_router, prefix="/api/wishlist", tags=["Wishlist"])
 app.include_router(address_router, prefix="/api/address", tags=["Address"])
 app.include_router(reviews_router, prefix="/api/reviews", tags=["Reviews"])
 app.include_router(support_router, prefix="/api/support", tags=["Support"])
-app.include_router(vton_router, prefix="/api/vton", tags=["VTON Pipeline"])
+app.include_router(vton_router, prefix="/api/vton", tags=["VTON Pipeline"], dependencies=[Depends(get_current_user)])
 
 @app.get("/api/tenant/theme")
 def get_tenant_theme(domain: str = "hq.mall.com", db: Session = Depends(get_db)):
@@ -113,24 +113,32 @@ from backend.database import engine, Base, SessionLocal
 from backend.models import User, Tenant, Brand
 from backend.utils.security import get_password_hash
 
-# [Alembic] 프로그램적 자동 마이그레이션 실행
-from alembic.config import Config
-from alembic import command
-
+# [DB 초기화] 새로운 DB 환경에서도 테이블이 자동 생성되도록 보장
 try:
-    logger.info("Running database migrations via Alembic...")
-    # main.py의 위치를 기준으로 절대 경로를 계산하여 구동환경의 Cwd 영향 방지
-    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    _INI_PATH = os.path.join(_BASE_DIR, "alembic.ini")
-    
-    alembic_cfg = Config(_INI_PATH)
-    # script_location을 패키지 내부 절대경로로 강제 지정
-    alembic_cfg.set_main_option("script_location", os.path.join(_BASE_DIR, "alembic"))
-    
-    command.upgrade(alembic_cfg, "head")
-    logger.info("Database migrations completed successfully.")
-except Exception as migration_error:
-    logger.error(f"Failed to run database migrations: {migration_error}")
+    logger.info("Initializing database tables...")
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables initialized successfully.")
+except Exception as table_init_error:
+    logger.error(f"Failed to initialize database tables: {table_init_error}")
+
+# [Alembic] 프로그램적 자동 마이그레이션 실행 (SQLite 락 대기 멈춤 방지를 위해 주석 처리)
+# from alembic.config import Config
+# from alembic import command
+
+# try:
+#     logger.info("Running database migrations via Alembic...")
+#     # main.py의 위치를 기준으로 절대 경로를 계산하여 구동환경의 Cwd 영향 방지
+#     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+#     _INI_PATH = os.path.join(_BASE_DIR, "alembic.ini")
+#     
+#     alembic_cfg = Config(_INI_PATH)
+#     # script_location을 패키지 내부 절대경로로 강제 지정
+#     alembic_cfg.set_main_option("script_location", os.path.join(_BASE_DIR, "alembic"))
+#     
+#     command.upgrade(alembic_cfg, "head")
+#     logger.info("Database migrations completed successfully.")
+# except Exception as migration_error:
+#     logger.error(f"Failed to run database migrations: {migration_error}")
 
 # Seed admin user and default tenants
 db = SessionLocal()

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 
 from backend.database import get_db
 from backend.models import User, CartItem, HQProduct
@@ -8,6 +8,26 @@ from backend.schemas import CartItemCreate, CartItemResponse, CartItemUpdate
 from backend.utils.deps import get_current_user
 
 router = APIRouter()
+
+
+def _get_product_main_image(product) -> Optional[str]:
+    """
+    상품의 실제 이미지 갤러리(product.images) 중 첫 번째 메인 썸네일을 반환합니다.
+    갤러리가 없거나 비어 있을 시 ai_fitting_image_url을 폴백으로 제공합니다.
+    """
+    if not product:
+        return None
+    if product.images:
+        import json
+        try:
+            imgs = json.loads(product.images) if isinstance(product.images, str) else product.images
+            if isinstance(imgs, list) and len(imgs) > 0:
+                return imgs[0]
+        except Exception:
+            if isinstance(product.images, list) and len(product.images) > 0:
+                return product.images[0]
+    return product.ai_fitting_image_url
+
 
 @router.get("/me", response_model=List[CartItemResponse])
 def get_my_cart(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -41,7 +61,7 @@ def get_my_cart(db: Session = Depends(get_db), current_user: User = Depends(get_
             "created_at": item.created_at,
             "product_name": product.kr_name if product else "Unknown Product",
             "product_price": product.sale_price if product and product.sale_price else (product.base_price if product else 0),
-            "product_image": product.ai_fitting_image_url if product else None,
+            "product_image": _get_product_main_image(product),
             "transparent_image": product.transparent_item_image_url if product else None,
             "product_category": layer
         })
@@ -103,7 +123,7 @@ def add_to_cart(
         "created_at": target_item.created_at,
         "product_name": product.kr_name,
         "product_price": product.sale_price or product.base_price,
-        "product_image": product.ai_fitting_image_url,
+        "product_image": _get_product_main_image(product),
         "transparent_image": product.transparent_item_image_url,
         "product_category": layer
     }
@@ -154,7 +174,7 @@ def update_cart_item(
         "created_at": item.created_at,
         "product_name": product.kr_name if product else "Unknown",
         "product_price": product.sale_price or product.base_price if product else 0,
-        "product_image": product.ai_fitting_image_url if product else None,
+        "product_image": _get_product_main_image(product),
         "transparent_image": product.transparent_item_image_url if product else None,
         "product_category": layer
     }

@@ -21,9 +21,12 @@ export default function ImageGallery({ images, productName, videoUrl }: ImageGal
     mediaItems.push({ type: "video", url: videoUrl });
   }
   
-  const displayImages = images && images.length > 0
-    ? images
-    : ["https://cdn-icons-png.flaticon.com/512/863/863684.png"];
+  const filtered = images 
+    ? images.filter(img => !img.includes("transparent") && !img.includes("item_") && !img.includes("vton") && !img.includes("tryon_"))
+    : [];
+  const displayImages = filtered.length > 0
+    ? filtered
+    : (images && images.length > 0 ? [images[0]] : ["https://cdn-icons-png.flaticon.com/512/863/863684.png"]);
     
   displayImages.forEach(img => {
     mediaItems.push({ type: "image", url: img });

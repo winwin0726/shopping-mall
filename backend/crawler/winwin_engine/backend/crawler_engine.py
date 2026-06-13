@@ -3402,6 +3402,11 @@ ordered_images는 최대 20개 파일명만 반환하세요.
         self.source_driver = None
         self.target_driver = None
         if self._source_crawler:
+            if hasattr(self._source_crawler, 'close_browser'):
+                try:
+                    self._source_crawler.close_browser()
+                except Exception as e:
+                    self.add_log(f"⚠️ 소스 크롤러 close_browser 오류: {e}")
             self._source_crawler = None
         if self._target_poster:
             self._target_poster = None

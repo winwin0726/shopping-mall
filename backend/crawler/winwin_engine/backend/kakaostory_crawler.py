@@ -21,17 +21,17 @@ class KakaoStoryCrawler:
         logger.info(f"🚀 카카오스토리 크롤러 엔진 부팅 중... 대상: {self.target_url}")
         
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=False,
-                args=["--window-size=800,700", "--window-position=0,0"]
-            )
-            context = await browser.new_context(
-                viewport={'width': 800, 'height': 700},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            page = await context.new_page()
-            
+            browser = None
             try:
+                browser = await p.chromium.launch(
+                    headless=False,
+                    args=["--window-size=800,700", "--window-position=0,0"]
+                )
+                context = await browser.new_context(
+                    viewport={'width': 800, 'height': 700},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page = await context.new_page()
                 # ─── STEP 1: 크롬 브라우저로 대상 페이지 접속 ───
                 logger.info("  🌐 페이지 접속 중...")
                 await page.goto(self.target_url, timeout=30000, wait_until="domcontentloaded")
@@ -173,7 +173,11 @@ class KakaoStoryCrawler:
                 except Exception as dmp_err:
                     logger.warning(f"⚠️ 에러 캡처 실패: {dmp_err}")
             finally:
-                await browser.close()
+                if browser:
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
 
 if __name__ == "__main__":
     import sys

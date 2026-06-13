@@ -1,7 +1,8 @@
 "use client";
 import { authFetch, API_URL } from "@/lib/api";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Palette, Sparkles, ShoppingCart, BookOpen, MessageSquare, Bot, 
   Check, RefreshCw, Layout, Grid, LayoutTemplate, Type, Image as ImageIcon, 
@@ -170,6 +171,10 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // 프리셋 전용 알림 상태 및 타이머 관리 레프
+  const [presetToast, setPresetToast] = useState<string | null>(null);
+  const presetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // AI Prompt State
   const [aiPrompt, setAiPrompt] = useState("");
@@ -500,8 +505,16 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
     setEnableReviews(features.enable_reviews !== false);
     setEnableAutocrawl(features.enable_autocrawl !== false);
 
-    setSuccessMsg("프리셋 스타일이 로컬 프리뷰에 반영되었습니다. 저장하려면 아래 '적용하기'를 누르세요.");
-    setTimeout(() => setSuccessMsg(null), 3000);
+    // 이전 실행 중이던 프리셋 타이머 초기화
+    if (presetTimeoutRef.current) {
+      clearTimeout(presetTimeoutRef.current);
+    }
+
+    setPresetToast("프리셋 스타일이 로컬 프리뷰에 반영되었습니다. 저장하려면 아래 '적용하기'를 누르세요.");
+    
+    presetTimeoutRef.current = setTimeout(() => {
+      setPresetToast(null);
+    }, 2500);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -599,9 +612,9 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-        <RefreshCw className="animate-spin text-blue-500 mb-4" size={36} />
-        <p className="text-sm">쇼핑몰 브랜딩 설정 데이터를 조회하는 중입니다...</p>
+      <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+        <RefreshCw className="animate-spin text-blue-600 mb-4" size={36} />
+        <p className="text-sm font-medium">쇼핑몰 브랜딩 설정 데이터를 조회하는 중입니다...</p>
       </div>
     );
   }
@@ -609,31 +622,31 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Title & Info */}
-      <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+      <div className="flex justify-between items-start border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Palette className="text-blue-500" /> 디자인 & 로고 제어 센터
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Palette className="text-blue-600" /> 디자인 & 로고 제어 센터
           </h2>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-500 text-sm mt-1">
             메인 페이지의 테마 컬러, 로고 파일, 배너 텍스트, 상품 레이아웃 배치를 한 곳에서 실시간 편집합니다.
           </p>
         </div>
-        <div className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
-          <span className="text-slate-500">도메인:</span> <span className="text-blue-400 font-mono font-bold">{tenant?.domain}</span>
+        <div className="text-xs bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-700 shadow-sm">
+          <span className="text-slate-500">도메인:</span> <span className="text-blue-600 font-mono font-bold">{tenant?.domain}</span>
         </div>
       </div>
 
       {/* Success / Error Alerts */}
       {successMsg && (
-        <div className="bg-emerald-950/40 border border-emerald-800 text-emerald-300 p-4 rounded-xl flex items-center animate-in slide-in-from-top-2 duration-200">
-          <Check className="mr-3 text-emerald-400 shrink-0" size={20} />
-          <span className="text-sm font-medium">{successMsg}</span>
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center animate-in slide-in-from-top-2 duration-200">
+          <Check className="mr-3 text-emerald-600 shrink-0" size={20} />
+          <span className="text-sm font-semibold">{successMsg}</span>
         </div>
       )}
       {error && (
-        <div className="bg-red-950/40 border border-red-800 text-red-300 p-4 rounded-xl flex items-center">
-          <span className="mr-3 text-red-400 font-bold">⚠️</span>
-          <span className="text-sm font-medium">{error}</span>
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-center">
+          <span className="mr-3 text-red-500 font-bold">⚠️</span>
+          <span className="text-sm font-semibold">{error}</span>
         </div>
       )}
 
@@ -644,11 +657,11 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
         <form onSubmit={handleSubmit} className="lg:col-span-7 space-y-6">
           
           {/* AI Banner Copywriter Widget (Gemini 2.5 Flash) */}
-          <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-5 space-y-4 relative overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 relative overflow-hidden shadow-sm">
             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-xl rounded-full"></div>
             
-            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Cpu size={16} className="text-blue-400" /> 
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Cpu size={16} className="text-blue-600" /> 
               Gemini 2.5 Flash 메인 배너 AI 카피라이팅 & 테마 자동 빌더
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
@@ -661,7 +674,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 onChange={(e) => setAiPrompt(e.target.value)}
                 placeholder="어떤 느낌의 배너를 생성하고 싶으신가요? (예: 시원한 여름 바다 휴양지 분위기의 프리미엄 가방 전시 배너)"
                 rows={3}
-                className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition resize-none leading-relaxed"
+                className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition resize-none leading-relaxed"
                 disabled={aiGenerating}
               />
               
@@ -685,9 +698,9 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* Preset Styles */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <LayoutTemplate size={16} className="text-amber-500" /> 원클릭 테마 디자인 프리셋 (Presets)
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <LayoutTemplate size={16} className="text-amber-600" /> 원클릭 테마 디자인 프리셋 (Presets)
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
               조화롭게 선별된 고품격 폰트와 컬러 세트입니다. 클릭하면 즉시 프리뷰에 세팅됩니다.
@@ -698,9 +711,9 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                   key={idx}
                   type="button"
                   onClick={() => applyPreset(preset.config)}
-                  className="bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-left p-3 rounded-lg transition-all text-xs flex flex-col gap-1.5"
+                  className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left p-3 rounded-lg transition-all text-xs flex flex-col gap-1.5 text-slate-700 hover:text-slate-900 font-medium"
                 >
-                  <span className="font-bold text-slate-200">{preset.name}</span>
+                  <span className="font-bold text-slate-800">{preset.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: preset.config.primaryColor }} />
                     <span className="text-[10px] text-slate-500 font-mono">{preset.config.fontFamily} / {preset.config.layoutStyle}</span>
@@ -711,43 +724,43 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* Shop Name & Logo Settings */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <Type size={16} className="text-blue-500" /> 쇼핑몰 로고명 및 이미지 파일 변경
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Type size={16} className="text-blue-600" /> 쇼핑몰 로고명 및 이미지 파일 변경
             </h3>
             
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">통합 쇼핑몰 이름 (회사명)</label>
+                <label className="text-xs text-slate-600 font-medium">통합 쇼핑몰 이름 (회사명)</label>
                 <input
                   type="text"
                   value={shopName}
                   onChange={(e) => setShopName(e.target.value)}
                   placeholder="예: AI 가상피팅 스마트몰"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                   required
                 />
               </div>
 
               {/* Logo Upload Block */}
-              <div className="bg-slate-950/45 border border-slate-850 p-4 rounded-xl space-y-3">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                    <ImageIcon size={14} className="text-blue-400" /> 대표 로고 이미지 설정
+                  <label className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                    <ImageIcon size={14} className="text-blue-600" /> 대표 로고 이미지 설정
                   </label>
-                  {uploadingLogo && <span className="text-[10px] text-blue-500 animate-pulse">로고 사진 업로드 중...</span>}
+                  {uploadingLogo && <span className="text-[10px] text-blue-600 animate-pulse">로고 사진 업로드 중...</span>}
                 </div>
 
                 {logoUrl && (
-                  <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-                    <div className="bg-white p-1 rounded">
+                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="bg-slate-50 p-1 rounded border border-slate-200">
                       <img src={logoUrl} alt="Logo" className="h-6 max-w-[120px] object-contain" />
                     </div>
                     <span className="text-[10px] text-slate-500 truncate flex-1 font-mono">{logoUrl}</span>
                     <button
                       type="button"
                       onClick={() => setLogoUrl("")}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-950/20 p-1.5 rounded transition"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"
                       title="로고 제거"
                     >
                       <Trash2 size={14} />
@@ -757,20 +770,20 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-500 block">로고 이미지 URL 직접 입력</span>
+                    <span className="text-[10px] text-slate-600 block">로고 이미지 URL 직접 입력</span>
                     <input
                       type="text"
                       value={logoUrl}
                       onChange={(e) => setLogoUrl(e.target.value)}
                       placeholder="https://example.com/logo.png"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-500 block">컴퓨터 사진 파일 첨부</span>
-                    <label className="w-full bg-slate-900 hover:bg-slate-855 border border-slate-855 hover:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold">
-                      <Upload size={14} className="text-blue-500" />
+                    <span className="text-[10px] text-slate-600 block">컴퓨터 사진 파일 첨부</span>
+                    <label className="w-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-lg px-3 py-2 text-xs text-slate-700 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold shadow-sm">
+                      <Upload size={14} className="text-blue-600" />
                       {uploadingLogo ? "업로드 중..." : "로고 사진 첨부하기"}
                       <input
                         type="file"
@@ -787,19 +800,19 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* Main Hero Banner Settings */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                <ImageIcon size={16} className="text-blue-500" /> 메인 히어로 배너 설정
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <ImageIcon size={16} className="text-blue-600" /> 메인 히어로 배너 설정
               </h3>
-              <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-850 shrink-0">
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setBannerMode("text_and_bg")}
                   className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
                     bannerMode === "text_and_bg"
                       ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-350"
+                      : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
                   글자 + 배경 조합
@@ -810,7 +823,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                   className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
                     bannerMode === "image_only"
                       ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-350"
+                      : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
                   사진 파일 단독 첨부
@@ -821,44 +834,44 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
             {bannerMode === "text_and_bg" ? (
               <div className="space-y-3 animate-in fade-in duration-200">
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-medium">배너 메인 대제목 (Banner Title)</label>
+                  <label className="text-xs text-slate-600 font-medium">배너 메인 대제목 (Banner Title)</label>
                   <input
                     type="text"
                     value={bannerTitle}
                     onChange={(e) => setBannerTitle(e.target.value)}
                     placeholder="예: 세상에 없던 나만의 가상 피팅 룸"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-750 focus:outline-none focus:border-blue-600 transition"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-medium">배너 상세 소제목 (Banner Subtitle)</label>
+                  <label className="text-xs text-slate-600 font-medium">배너 상세 소제목 (Banner Subtitle)</label>
                   <textarea
                     value={bannerSubtitle}
                     onChange={(e) => setBannerSubtitle(e.target.value)}
                     placeholder="예: 클릭 한 번으로 가상에서 마음껏 착용해보세요."
                     rows={2}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-750 focus:outline-none focus:border-blue-600 transition resize-none font-sans"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition resize-none font-sans"
                   />
                 </div>
 
                 {/* Banner Background Image Upload Box */}
-                <div className="bg-slate-950/45 border border-slate-850 p-4 rounded-xl space-y-3">
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                      <ImageIcon size={14} className="text-blue-400" /> 배너 배경 이미지 설정
+                    <label className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-blue-600" /> 배너 배경 이미지 설정
                     </label>
-                    {uploadingBannerBg && <span className="text-[10px] text-blue-500 animate-pulse">배너 배경 사진 업로드 중...</span>}
+                    {uploadingBannerBg && <span className="text-[10px] text-blue-600 animate-pulse">배너 배경 사진 업로드 중...</span>}
                   </div>
 
                   {bannerBgUrl && (
-                    <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
                       <img src={bannerBgUrl} alt="Banner Background" className="h-8 w-16 object-cover rounded" />
                       <span className="text-[10px] text-slate-500 truncate flex-1 font-mono">{bannerBgUrl}</span>
                       <button
                         type="button"
                         onClick={() => setBannerBgUrl("")}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-950/20 p-1.5 rounded transition"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"
                         title="배경 제거"
                       >
                         <Trash2 size={14} />
@@ -868,20 +881,20 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 block">배경 이미지 URL 직접 입력</span>
+                      <span className="text-[10px] text-slate-600 block">배경 이미지 URL 직접 입력</span>
                       <input
                         type="text"
                         value={bannerBgUrl}
                         onChange={(e) => setBannerBgUrl(e.target.value)}
                         placeholder="https://images.unsplash.com/..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 block">컴퓨터 사진 파일 첨부</span>
-                      <label className="w-full bg-slate-900 hover:bg-slate-855 border border-slate-855 hover:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold">
-                        <Upload size={14} className="text-blue-500" />
+                      <span className="text-[10px] text-slate-600 block">컴퓨터 사진 파일 첨부</span>
+                      <label className="w-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-lg px-3 py-2 text-xs text-slate-700 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold shadow-sm">
+                        <Upload size={14} className="text-blue-600" />
                         {uploadingBannerBg ? "업로드 중..." : "배경 사진 첨부하기"}
                         <input
                           type="file"
@@ -898,50 +911,50 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
             ) : (
               <div className="space-y-3 animate-in fade-in duration-200">
                 {/* Banner Image Only Upload Box */}
-                <div className="bg-slate-950/45 border border-slate-850 p-4 rounded-xl space-y-3">
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                      <ImageIcon size={14} className="text-blue-400" /> 메인배너 전용 사진 설정
+                    <label className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-blue-600" /> 메인배너 전용 사진 설정
                     </label>
-                    {uploadingBannerImageOnly && <span className="text-[10px] text-blue-500 animate-pulse">배너 사진 업로드 중...</span>}
+                    {uploadingBannerImageOnly && <span className="text-[10px] text-blue-600 animate-pulse">배너 사진 업로드 중...</span>}
                   </div>
 
                   {bannerImageOnlyUrl ? (
-                    <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
                       <img src={bannerImageOnlyUrl} alt="Banner Image Only" className="h-8 w-16 object-cover rounded" />
                       <span className="text-[10px] text-slate-500 truncate flex-1 font-mono">{bannerImageOnlyUrl}</span>
                       <button
                         type="button"
                         onClick={() => setBannerImageOnlyUrl("")}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-950/20 p-1.5 rounded transition"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"
                         title="배너 사진 제거"
                       >
                         <Trash2 size={14} />
                       </button>
                     </div>
                   ) : (
-                    <div className="border border-dashed border-slate-800 rounded-lg p-5 flex flex-col items-center justify-center text-slate-500 bg-slate-950/50">
-                      <ImageIcon size={24} className="text-slate-600 mb-1.5" />
+                    <div className="border border-dashed border-slate-300 rounded-lg p-5 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50">
+                      <ImageIcon size={24} className="text-slate-400 mb-1.5" />
                       <p className="text-[10px]">등록된 메인배너 사진이 없습니다. 아래에서 사진을 첨부해 주세요.</p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 block">배너 이미지 URL 직접 입력</span>
+                      <span className="text-[10px] text-slate-600 block">배너 이미지 URL 직접 입력</span>
                       <input
                         type="text"
                         value={bannerImageOnlyUrl}
                         onChange={(e) => setBannerImageOnlyUrl(e.target.value)}
                         placeholder="https://example.com/banner.png"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 block">컴퓨터 사진 파일 간편 첨부</span>
-                      <label className="w-full bg-slate-900 hover:bg-slate-855 border border-slate-855 hover:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold">
-                        <Upload size={14} className="text-blue-500" />
+                      <span className="text-[10px] text-slate-600 block">컴퓨터 사진 파일 간편 첨부</span>
+                      <label className="w-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-lg px-3 py-2 text-xs text-slate-700 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold shadow-sm">
+                        <Upload size={14} className="text-blue-600" />
                         {uploadingBannerImageOnly ? "업로드 중..." : "배너 사진 첨부하기"}
                         <input
                           type="file"
@@ -956,13 +969,13 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-medium">배너 클릭 시 이동 링크 (Connection Link URL)</label>
+                  <label className="text-xs text-slate-600 font-medium">배너 클릭 시 이동 링크 (Connection Link URL)</label>
                   <input
                     type="text"
                     value={bannerLinkUrl}
                     onChange={(e) => setBannerLinkUrl(e.target.value)}
                     placeholder="예: /category/남성의류 또는 /products/12"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                   />
                   <p className="text-[10px] text-slate-500">배너 사진 클릭 시 이동시킬 상품 경로 또는 카테고리 기획전 주소입니다.</p>
                 </div>
@@ -970,15 +983,15 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
             )}
           </div>
           {/* Color & Typography */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <Sliders size={16} className="text-blue-500" /> 브랜드 컬러 & 타이포그래피 설정
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Sliders size={16} className="text-blue-600" /> 브랜드 컬러 & 타이포그래피 설정
             </h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Primary Color */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">메인 테마 컬러 (Primary)</label>
+                <label className="text-xs text-slate-600 font-medium">메인 테마 컬러 (Primary)</label>
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -990,14 +1003,14 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                     type="text"
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono uppercase"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono uppercase"
                   />
                 </div>
               </div>
 
               {/* Secondary Color */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">보조 테마 컬러 (Secondary)</label>
+                <label className="text-xs text-slate-600 font-medium">보조 테마 컬러 (Secondary)</label>
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -1009,14 +1022,14 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                     type="text"
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono uppercase"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono uppercase"
                   />
                 </div>
               </div>
 
               {/* Background Color */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">쇼핑몰 배경 컬러 (Background)</label>
+                <label className="text-xs text-slate-600 font-medium">쇼핑몰 배경 컬러 (Background)</label>
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -1028,7 +1041,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                     type="text"
                     value={backgroundColor}
                     onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono uppercase"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono uppercase"
                   />
                 </div>
               </div>
@@ -1037,13 +1050,13 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               {/* Font Family */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                <label className="text-xs text-slate-600 font-medium flex items-center gap-1">
                   <Type size={12} /> 기본 폰트 패밀리
                 </label>
                 <select
                   value={fontFamily}
                   onChange={(e) => setFontFamily(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 >
                   <option value="Inter">Inter (깔끔한 기본 영문/한글)</option>
                   <option value="Outfit">Outfit (트렌디 럭셔리)</option>
@@ -1054,11 +1067,11 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
               {/* Border Radius */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">UI 컴포넌트 둥글기 (Border Radius)</label>
+                <label className="text-xs text-slate-600 font-medium">UI 컴포넌트 둥글기 (Border Radius)</label>
                 <select
                   value={borderRadius}
                   onChange={(e) => setBorderRadius(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 >
                   <option value="none">사각형 각짐 (Sharp/None)</option>
                   <option value="sm">둥글기 작음 (Small)</option>
@@ -1071,18 +1084,18 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* Grid Layout & Style Controls */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <Layout size={16} className="text-blue-500" /> 메인 상품 레이아웃 & 그리드
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Layout size={16} className="text-blue-600" /> 메인 상품 레이아웃 & 그리드
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">레이아웃 스타일</label>
+                <label className="text-xs text-slate-600 font-medium">레이아웃 스타일</label>
                 <select
                   value={layoutStyle}
                   onChange={(e) => setLayoutStyle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 >
                   <option value="modern">기본 모던 그리드형 (Modern Grid)</option>
                   <option value="gallery">AI 룩북 갤러리 강조형 (AI Gallery)</option>
@@ -1091,19 +1104,19 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                <label className="text-xs text-slate-600 font-medium flex items-center gap-1">
                   <Grid size={12} /> 데스크톱 그리드 열 개수 (Grid Cols)
                 </label>
                 <div className="flex gap-4 pt-1.5">
                   {[2, 3, 4].map((num) => (
-                    <label key={num} className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
+                    <label key={num} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none font-medium">
                       <input
                         type="radio"
                         name="gridColsEditor"
                         value={num}
                         checked={gridCols === num}
                         onChange={() => setGridCols(num)}
-                        className="w-3.5 h-3.5 border-slate-800 text-blue-600 bg-slate-950 focus:ring-0"
+                        className="w-3.5 h-3.5 border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       {num}열 배치
                     </label>
@@ -1114,38 +1127,38 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* 상단 프로모션 띠 배너 설정 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                <Sparkle size={16} className="text-red-500" /> 상단 프로모션 띠 배너 설정
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Sparkle size={16} className="text-red-600" /> 상단 프로모션 띠 배너 설정
               </h3>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={enablePromo}
                   onChange={(e) => setEnablePromo(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-800 text-blue-600 bg-slate-950 focus:ring-0"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-xs text-slate-400 font-semibold">사용 여부</span>
+                <span className="text-xs text-slate-600 font-semibold">사용 여부</span>
               </label>
             </div>
 
             {enablePromo && (
               <div className="space-y-3.5 animate-in fade-in duration-200">
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-medium">띠 배너 홍보 문구</label>
+                  <label className="text-xs text-slate-600 font-medium">띠 배너 홍보 문구</label>
                   <input
                     type="text"
                     value={promoText}
                     onChange={(e) => setPromoText(e.target.value)}
                     placeholder="예: 🔥 신규 회원 가입 시 10% 추가 즉시 할인쿠폰 자동 지급!"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs text-slate-400 font-medium">배경 색상 (Bg Color)</label>
+                    <label className="text-xs text-slate-600 font-medium">배경 색상 (Bg Color)</label>
                     <div className="flex gap-2">
                       <input
                         type="color"
@@ -1157,13 +1170,13 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                         type="text"
                         value={promoBgColor}
                         onChange={(e) => setPromoBgColor(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono uppercase"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono uppercase"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs text-slate-400 font-medium">글자 색상 (Text Color)</label>
+                    <label className="text-xs text-slate-600 font-medium">글자 색상 (Text Color)</label>
                     <div className="flex gap-2">
                       <input
                         type="color"
@@ -1175,20 +1188,20 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                         type="text"
                         value={promoTextColor}
                         onChange={(e) => setPromoTextColor(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono uppercase"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono uppercase"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-medium">클릭 시 이동 링크 URL</label>
+                  <label className="text-xs text-slate-600 font-medium">클릭 시 이동 링크 URL</label>
                   <input
                     type="text"
                     value={promoLinkUrl}
                     onChange={(e) => setPromoLinkUrl(e.target.value)}
                     placeholder="예: /register 또는 /category/event"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                   />
                 </div>
               </div>
@@ -1196,51 +1209,51 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
           </div>
 
           {/* 메인 하단 프로모션 카드 배너 설정 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <ImageIcon size={16} className="text-blue-500" /> 메인 하단 프로모션 카드 배너 설정
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <ImageIcon size={16} className="text-blue-600" /> 메인 하단 프로모션 카드 배너 설정
             </h3>
 
             <div className="space-y-3.5">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">카드 배너 대제목</label>
+                <label className="text-xs text-slate-600 font-medium">카드 배너 대제목</label>
                 <input
                   type="text"
                   value={promoCardTitle}
                   onChange={(e) => setPromoCardTitle(e.target.value)}
                   placeholder="예: SUMMER SALE"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-750 focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">카드 배너 설명글 (줄바꿈 가능)</label>
+                <label className="text-xs text-slate-600 font-medium">카드 배너 설명글 (줄바꿈 가능)</label>
                 <textarea
                   value={promoCardDesc}
                   onChange={(e) => setPromoCardDesc(e.target.value)}
                   placeholder="예: 최대 50% 할인 혜택, AI 가상 피팅으로 나만의 스타일을 미리 확인해보세요!"
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-750 focus:outline-none focus:border-blue-600 transition resize-none font-sans"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition resize-none font-sans"
                 />
               </div>
 
               {/* Promo Card Image Upload Box */}
-              <div className="bg-slate-950/45 border border-slate-850 p-4 rounded-xl space-y-3">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                    <ImageIcon size={14} className="text-blue-400" /> 카드 배경 이미지 설정
+                  <label className="text-xs text-slate-700 font-medium flex items-center gap-1.5">
+                    <ImageIcon size={14} className="text-blue-600" /> 카드 배경 이미지 설정
                   </label>
-                  {uploadingPromoCardImg && <span className="text-[10px] text-blue-500 animate-pulse">사진 업로드 중...</span>}
+                  {uploadingPromoCardImg && <span className="text-[10px] text-blue-600 animate-pulse">사진 업로드 중...</span>}
                 </div>
 
                 {promoCardImgUrl && (
-                  <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
                     <img src={promoCardImgUrl} alt="Promo Card Bg" className="h-8 w-16 object-cover rounded" />
                     <span className="text-[10px] text-slate-500 truncate flex-1 font-mono">{promoCardImgUrl}</span>
                     <button
                       type="button"
                       onClick={() => setPromoCardImgUrl("")}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-950/20 p-1.5 rounded transition"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"
                       title="이미지 제거"
                     >
                       <Trash2 size={14} />
@@ -1250,20 +1263,20 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-500 block">이미지 URL 직접 입력</span>
+                    <span className="text-[10px] text-slate-600 block">이미지 URL 직접 입력</span>
                     <input
                       type="text"
                       value={promoCardImgUrl}
                       onChange={(e) => setPromoCardImgUrl(e.target.value)}
                       placeholder="https://images.unsplash.com/..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-500 block">컴퓨터 사진 파일 첨부</span>
-                    <label className="w-full bg-slate-900 hover:bg-slate-855 border border-slate-855 hover:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold">
-                      <Upload size={14} className="text-blue-500" />
+                    <span className="text-[10px] text-slate-600 block">컴퓨터 사진 파일 첨부</span>
+                    <label className="w-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-lg px-3 py-2 text-xs text-slate-700 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer transition h-[36px] font-semibold shadow-sm">
+                      <Upload size={14} className="text-blue-600" />
                       {uploadingPromoCardImg ? "업로드 중..." : "배경 사진 첨부하기"}
                       <input
                         type="file"
@@ -1278,123 +1291,123 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">클릭 시 이동 링크 URL</label>
+                <label className="text-xs text-slate-600 font-medium">클릭 시 이동 링크 URL</label>
                 <input
                   type="text"
                   value={promoCardLinkUrl}
                   onChange={(e) => setPromoCardLinkUrl(e.target.value)}
                   placeholder="예: /category/summer-sale"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-blue-600 transition font-mono"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                 />
               </div>
             </div>
           </div>
 
           {/* 푸터 사업자 정보 설정 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <Layout size={16} className="text-blue-500" /> 푸터 사업자 정보 설정
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Layout size={16} className="text-blue-600" /> 푸터 사업자 정보 설정
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">상호명 (회사명)</label>
+                <label className="text-xs text-slate-600 font-medium">상호명 (회사명)</label>
                 <input
                   type="text"
                   value={footerCompany}
                   onChange={(e) => setFooterCompany(e.target.value)}
                   placeholder="예: LUXAI 주식회사"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">대표자명</label>
+                <label className="text-xs text-slate-600 font-medium">대표자명</label>
                 <input
                   type="text"
                   value={footerOwner}
                   onChange={(e) => setFooterOwner(e.target.value)}
                   placeholder="예: 홍길동"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 font-medium">회사 주소</label>
+              <label className="text-xs text-slate-600 font-medium">회사 주소</label>
               <input
                 type="text"
                 value={footerAddress}
                 onChange={(e) => setFooterAddress(e.target.value)}
                 placeholder="예: 서울시 강남구 테헤란로 123"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">대표 전화번호</label>
+                <label className="text-xs text-slate-600 font-medium">대표 전화번호</label>
                 <input
                   type="text"
                   value={footerTel}
                   onChange={(e) => setFooterTel(e.target.value)}
                   placeholder="예: 1644-1234"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">고객문의 이메일 주소</label>
+                <label className="text-xs text-slate-600 font-medium">고객문의 이메일 주소</label>
                 <input
                   type="email"
                   value={footerEmail}
                   onChange={(e) => setFooterEmail(e.target.value)}
                   placeholder="예: support@luxai.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">사업자 등록 번호</label>
+                <label className="text-xs text-slate-600 font-medium">사업자 등록 번호</label>
                 <input
                   type="text"
                   value={footerBizNum}
                   onChange={(e) => setFooterBizNum(e.target.value)}
                   placeholder="예: 120-81-12345"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition font-mono"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">통신판매업 신고 번호</label>
+                <label className="text-xs text-slate-600 font-medium">통신판매업 신고 번호</label>
                 <input
                   type="text"
                   value={footerReportNum}
                   onChange={(e) => setFooterReportNum(e.target.value)}
                   placeholder="예: 제 2026-서울강남-1234호"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 font-medium">하단 저작권 표시 (Copyright)</label>
+              <label className="text-xs text-slate-600 font-medium">하단 저작권 표시 (Copyright)</label>
               <input
                 type="text"
                 value={footerCopyright}
                 onChange={(e) => setFooterCopyright(e.target.value)}
                 placeholder="© 2026 LUXAI. ALL RIGHTS RESERVED."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-600 transition"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
               />
             </div>
           </div>
 
           {/* Solution Feature Control */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-              <Bot size={16} className="text-blue-500" /> 상세 솔루션 기능 노출 (Feature Control)
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Bot size={16} className="text-blue-600" /> 상세 솔루션 기능 노출 (Feature Control)
             </h3>
             <p className="text-xs text-slate-500">
               메인페이지와 상세페이지에 노출될 인공지능 솔루션 및 부가 기능 스위치입니다.
@@ -1402,69 +1415,69 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               {/* Feature: VTON */}
-              <label className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-slate-700 transition">
+              <label className="flex items-center justify-between p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition shadow-sm">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={14} className="text-purple-400" />
-                  <span className="text-xs font-semibold text-slate-300">AI 가상 피팅 활성화</span>
+                  <Sparkles size={14} className="text-purple-600" />
+                  <span className="text-xs font-semibold text-slate-700">AI 가상 피팅 활성화</span>
                 </div>
                 <input
                   type="checkbox"
                   checked={enableVton}
                   onChange={(e) => setEnableVton(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-800 text-blue-600 bg-slate-900"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
               </label>
 
               {/* Feature: Checkout */}
-              <label className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-slate-700 transition">
+              <label className="flex items-center justify-between p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition shadow-sm">
                 <div className="flex items-center gap-2">
-                  <ShoppingCart size={14} className="text-blue-400" />
-                  <span className="text-xs font-semibold text-slate-300">장바구니 & 결제 활성화</span>
+                  <ShoppingCart size={14} className="text-blue-600" />
+                  <span className="text-xs font-semibold text-slate-700">장바구니 & 결제 활성화</span>
                 </div>
                 <input
                   type="checkbox"
                   checked={enableCheckout}
                   onChange={(e) => setEnableCheckout(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-800 text-blue-600 bg-slate-900"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
               </label>
 
               {/* Feature: Lookbook */}
-              <label className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-slate-700 transition">
+              <label className="flex items-center justify-between p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition shadow-sm">
                 <div className="flex items-center gap-2">
-                  <BookOpen size={14} className="text-teal-400" />
-                  <span className="text-xs font-semibold text-slate-300">AI 테마 룩북 활성화</span>
+                  <BookOpen size={14} className="text-teal-600" />
+                  <span className="text-xs font-semibold text-slate-700">AI 테마 룩북 활성화</span>
                 </div>
                 <input
                   type="checkbox"
                   checked={enableLookbook}
                   onChange={(e) => setEnableLookbook(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-800 text-blue-600 bg-slate-900"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
               </label>
 
               {/* Feature: Reviews */}
-              <label className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-slate-700 transition">
+              <label className="flex items-center justify-between p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition shadow-sm">
                 <div className="flex items-center gap-2">
-                  <MessageSquare size={14} className="text-amber-400" />
-                  <span className="text-xs font-semibold text-slate-300">게시판 & 리뷰 활성화</span>
+                  <MessageSquare size={14} className="text-amber-600" />
+                  <span className="text-xs font-semibold text-slate-700">게시판 & 리뷰 활성화</span>
                 </div>
                 <input
                   type="checkbox"
                   checked={enableReviews}
                   onChange={(e) => setEnableReviews(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-800 text-blue-600 bg-slate-900"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
               </label>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={fetchTenantTheme}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2 rounded-lg text-xs font-semibold transition"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 px-4 py-2 rounded-lg text-xs font-semibold transition shadow-sm"
             >
               되돌리기
             </button>
@@ -1489,12 +1502,12 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
         {/* RIGHT: Live Interactive Preview */}
         <div className="lg:col-span-5 space-y-4">
           <div className="sticky top-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-              <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Eye size={14} className="text-emerald-400" /> 실시간 쇼핑몰 프리뷰 (Live Miniature Preview)
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-lg">
+              <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Eye size={14} className="text-emerald-600" /> 실시간 쇼핑몰 프리뷰 (Live Miniature Preview)
                 </span>
-                <span className="text-[10px] bg-slate-950 text-slate-500 px-2 py-0.5 rounded font-mono">
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">
                   {fontFamily} Font
                 </span>
               </div>
@@ -1515,8 +1528,8 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 )}
 
                 {/* 1. Header Mini Area */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4 text-[10px]">
-                  <span className="font-black tracking-wider text-slate-800 dark:text-white uppercase flex items-center gap-1">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4 text-[10px]">
+                  <span className="font-black tracking-wider text-slate-800 uppercase flex items-center gap-1">
                     {logoUrl ? (
                       <img src={logoUrl} alt="Logo" className="h-4 max-w-[80px] object-contain bg-white/20 p-0.5 rounded" />
                     ) : (
@@ -1529,7 +1542,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                       </>
                     )}
                   </span>
-                  <div className="flex gap-2 text-slate-400 dark:text-slate-500 font-medium">
+                  <div className="flex gap-2 text-slate-400 font-medium">
                     <span>SHOP</span>
                     <span>AI FIT</span>
                     <span>MY</span>
@@ -1539,7 +1552,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 {/* 2. Banner Preview */}
                 {bannerMode === "image_only" ? (
                   <div 
-                    className="relative rounded-lg overflow-hidden flex flex-col justify-end min-h-[140px] text-white transition-all duration-300 bg-cover bg-center border border-slate-200 dark:border-slate-800"
+                    className="relative rounded-lg overflow-hidden flex flex-col justify-end min-h-[140px] text-white transition-all duration-300 bg-cover bg-center border border-slate-200"
                     style={{
                       backgroundImage: bannerImageOnlyUrl ? `url(${bannerImageOnlyUrl})` : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
                     }}
@@ -1589,22 +1602,22 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 {/* 3. AI Feature Flags Indicators */}
                 <div className="my-4 flex flex-wrap gap-1">
                   {enableVton && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 rounded text-[8px] font-bold">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded text-[8px] font-bold">
                       <Sparkles size={8} /> 가상피팅 ON
                     </span>
                   )}
                   {enableLookbook && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 rounded text-[8px] font-bold">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-teal-500/10 text-teal-600 border border-teal-500/20 rounded text-[8px] font-bold">
                       <BookOpen size={8} /> AI코디 ON
                     </span>
                   )}
                   {enableCheckout && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded text-[8px] font-bold">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded text-[8px] font-bold">
                       <ShoppingCart size={8} /> 주문/결제 ON
                     </span>
                   )}
                   {enableReviews && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[8px] font-bold">
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded text-[8px] font-bold">
                       <MessageSquare size={8} /> 구매후기 ON
                     </span>
                   )}
@@ -1625,9 +1638,9 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                     {[1, 2, 3, 4].slice(0, gridCols === 2 ? 2 : gridCols === 4 ? 4 : 3).map((item) => (
                       <div 
                         key={item} 
-                        className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 p-1.5 transition-all shadow-sm overflow-hidden flex flex-col justify-between ${getRadiusClass(borderRadius)}`}
+                        className={`bg-white border border-slate-200 p-1.5 transition-all shadow-sm overflow-hidden flex flex-col justify-between ${getRadiusClass(borderRadius)}`}
                       >
-                        <div className="w-full aspect-[4/5] bg-slate-100 dark:bg-slate-700 rounded-sm mb-1.5 relative overflow-hidden flex items-center justify-center">
+                        <div className="w-full aspect-[4/5] bg-slate-100 rounded-sm mb-1.5 relative overflow-hidden flex items-center justify-center">
                           <span className="text-[7px] text-slate-400">PRODUCT {item}</span>
                           {enableVton && (
                             <span 
@@ -1640,14 +1653,14 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                           )}
                         </div>
                         <div className="space-y-0.5 text-[8px]">
-                          <div className="font-bold text-slate-700 dark:text-slate-200 truncate">슬림핏 코튼 자켓</div>
+                          <div className="font-bold text-slate-700 truncate">슬림핏 코튼 자켓</div>
                           <div className="text-slate-400 line-through text-[7px]">89,000원</div>
-                          <div className="font-black text-slate-800 dark:text-white" style={{ color: primaryColor }}>59,000원</div>
+                          <div className="font-black text-slate-800" style={{ color: primaryColor }}>59,000원</div>
                         </div>
                         {enableCheckout && (
                           <button 
                             type="button"
-                            className="mt-1.5 w-full py-0.5 bg-slate-900 dark:bg-slate-700 text-white rounded text-[7px] font-medium"
+                            className="mt-1.5 w-full py-0.5 bg-slate-900 text-white rounded text-[7px] font-medium"
                           >
                             담기
                           </button>
@@ -1660,7 +1673,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 {/* 4.5 Promo Card Banner Preview */}
                 <div className="mt-6 pt-2">
                   <div 
-                    className="relative rounded-lg overflow-hidden flex flex-col justify-center min-h-[120px] text-white transition-all duration-300 bg-cover bg-center border border-slate-200 dark:border-slate-800"
+                    className="relative rounded-lg overflow-hidden flex flex-col justify-center min-h-[120px] text-white transition-all duration-300 bg-cover bg-center border border-slate-200"
                     style={{
                       backgroundImage: promoCardImgUrl ? `url(${promoCardImgUrl})` : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
                     }}
@@ -1683,9 +1696,9 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                 </div>
 
                 {/* 5. Footer Preview */}
-                <div className="mt-6 -mx-6 -mb-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-850 p-4 text-[7px] text-slate-500 dark:text-slate-400 space-y-2">
-                  <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-1.5">
-                    <span className="font-bold text-slate-700 dark:text-slate-350">{footerCompany || "회사명"}</span>
+                <div className="mt-6 -mx-6 -mb-6 bg-slate-50 border-t border-slate-200 p-4 text-[7px] text-slate-500 space-y-2">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                    <span className="font-bold text-slate-700">{footerCompany || "회사명"}</span>
                     <span>대표자: {footerOwner || "대표자"}</span>
                   </div>
                   <div className="space-y-0.5 leading-relaxed opacity-80">
@@ -1699,7 +1712,7 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
                       <span>통신판매신고: {footerReportNum || "신고번호"}</span>
                     </div>
                   </div>
-                  <div className="text-[6px] text-slate-400 dark:text-slate-600 pt-1">
+                  <div className="text-[6px] text-slate-400 pt-1">
                     {footerCopyright || `© 2026 ${shopName || "LUX AI"}. All rights reserved.`}
                   </div>
                 </div>
@@ -1708,11 +1721,11 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
             </div>
             
             {/* Guide Card */}
-            <div className="bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl mt-4 space-y-2">
-              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                <HelpCircle size={14} className="text-blue-400" /> 디자인 가이드 팁
+            <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl mt-4 space-y-2">
+              <span className="text-xs font-semibold text-slate-800 flex items-center gap-1">
+                <HelpCircle size={14} className="text-blue-600" /> 디자인 가이드 팁
               </span>
-              <p className="text-[10px] text-slate-400 leading-normal">
+              <p className="text-[10px] text-slate-600 leading-normal">
                 메인 배너의 이미지 URL을 비우시면 기본적으로 <strong>메인 컬러와 보조 컬러 간의 세련된 그라데이션</strong>이 적용되어 더욱 트렌디하고 화려한 첫인상을 제공합니다.
               </p>
             </div>
@@ -1720,6 +1733,36 @@ export default function DesignTab({ onThemeUpdate }: { onThemeUpdate?: (tenant: 
         </div>
 
       </div>
+
+      {/* 프리셋 적용 플로팅 토스트 팝업 (화면 중앙) */}
+      <AnimatePresence>
+        {presetToast && (
+          <motion.div
+            initial={{ opacity: 0, x: "-50%", y: "-40%", scale: 0.9 }}
+            animate={{ opacity: 1, x: "-50%", y: "-50%", scale: 1 }}
+            exit={{ opacity: 0, x: "-50%", y: "-40%", scale: 0.95 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="fixed top-1/2 left-1/2 z-50 max-w-sm bg-white/95 backdrop-blur-md border border-emerald-500/20 text-emerald-700 p-4 rounded-xl shadow-xl flex items-start gap-3"
+            style={{ boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 0 15px rgba(16, 185, 129, 0.05)" }}
+          >
+            <div className="bg-emerald-50 p-1.5 rounded-lg text-emerald-600 shrink-0 mt-0.5">
+              <Check size={16} />
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="text-xs font-bold text-slate-900">스타일 프리셋 반영 완료</p>
+              <p className="text-[11px] text-slate-500 leading-normal">{presetToast}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPresetToast(null)}
+              className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 w-5 h-5 rounded-md flex items-center justify-center text-sm transition"
+              title="닫기"
+            >
+              &times;
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

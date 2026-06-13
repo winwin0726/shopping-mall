@@ -15,11 +15,22 @@ class Settings(BaseSettings):
     # JWT 설정(SECRET_KEY/ALGORITHM/만료)의 단일 소스는 backend/utils/security.py.
     # (과거 여기 중복 정의가 있었으나 미사용 + 값 충돌(60분 vs 7일)로 제거 — A5)
     GEMINI_API_KEY: Optional[str] = None
+    PHOTOROOM_API_KEY: Optional[str] = None
+    REPLICATE_API_TOKEN: Optional[str] = None
+    FAL_KEY: Optional[str] = None
     BACKEND_URL: str = "http://localhost:8002"
     # 결제 개발 모드: True 면 실제 PG 검증 없이 결제 성공 처리(로컬 데모용). 운영에서는 반드시 False.
     PAYMENTS_DEV_MODE: bool = True
     # CORS 허용 오리진 (쉼표 구분). 운영 도메인 추가 시 환경변수로 지정.
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # 이메일 발송 설정
+    SMTP_HOST: str = "smtp.daum.net"
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAIL_FROM: Optional[str] = None
+    EMAIL_FROM_NAME: str = "LUXAI 쇼핑몰"
 
     class Config:
         env_file = env_path

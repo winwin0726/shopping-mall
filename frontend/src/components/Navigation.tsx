@@ -5,13 +5,22 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingBag, Search, Menu, X, User, LogOut, Settings, MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { API_URL } from "@/lib/api";
 
 const CATEGORIES = [
-  "남성의류", "여성의류", "가방", "지갑", "시계", "악세사리", "신발", "국내배송"
+  "남성의류", "여성의류", "가방/지갑", "시계/악세사리", "신발", "국내배송"
 ];
+
+const CATEGORY_MAP: Record<string, string> = {
+  "남성의류": "/category/남성의류",
+  "여성의류": "/category/여성의류",
+  "가방/지갑": "/category/가방",
+  "시계/악세사리": "/category/시계",
+  "신발": "/category/신발",
+  "국내배송": "/category/국내배송"
+};
 
 const NAV_SUB_CATEGORIES: Record<string, { name: string; href: string; children?: { name: string; href: string }[] }[]> = {
   "남성의류": [
@@ -46,23 +55,43 @@ const NAV_SUB_CATEGORIES: Record<string, { name: string; href: string; children?
       ]
     }
   ],
-  "가방": [
-    { name: "토트백", href: "/category/가방?sub_category=토트백" },
-    { name: "크로스백", href: "/category/가방?sub_category=크로스백" },
-    { name: "백팩", href: "/category/가방?sub_category=백팩" }
+  "가방/지갑": [
+    {
+      name: "가방",
+      href: "/category/가방",
+      children: [
+        { name: "토트백", href: "/category/가방?sub_category=토트백" },
+        { name: "크로스백", href: "/category/가방?sub_category=크로스백" },
+        { name: "백팩", href: "/category/가방?sub_category=백팩" }
+      ]
+    },
+    {
+      name: "지갑",
+      href: "/category/지갑",
+      children: [
+        { name: "반지갑", href: "/category/지갑?sub_category=반지갑" },
+        { name: "장지갑", href: "/category/지갑?sub_category=장지갑" }
+      ]
+    }
   ],
-  "지갑": [
-    { name: "반지갑", href: "/category/지갑?sub_category=반지갑" },
-    { name: "장지갑", href: "/category/지갑?sub_category=장지갑" }
-  ],
-  "시계": [
-    { name: "메탈시계", href: "/category/시계?sub_category=메탈시계" },
-    { name: "가죽시계", href: "/category/시계?sub_category=가죽시계" }
-  ],
-  "악세사리": [
-    { name: "목걸이", href: "/category/악세사리?sub_category=목걸이" },
-    { name: "반지", href: "/category/악세사리?sub_category=반지" },
-    { name: "팔찌", href: "/category/악세사리?sub_category=팔찌" }
+  "시계/악세사리": [
+    {
+      name: "시계",
+      href: "/category/시계",
+      children: [
+        { name: "메탈시계", href: "/category/시계?sub_category=메탈시계" },
+        { name: "가죽시계", href: "/category/시계?sub_category=가죽시계" }
+      ]
+    },
+    {
+      name: "악세사리",
+      href: "/category/악세사리",
+      children: [
+        { name: "목걸이", href: "/category/악세사리?sub_category=목걸이" },
+        { name: "반지", href: "/category/악세사리?sub_category=반지" },
+        { name: "팔찌", href: "/category/악세사리?sub_category=팔찌" }
+      ]
+    }
   ]
 };
 
@@ -70,7 +99,19 @@ export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const { themeConfig, tenantName } = useTheme();
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    setIsSearchOpen(false);
+    setSearchQuery("");
+  };
 
   // 브랜드 목록 상태 및 카테고리 탭 상태 추가
   const [brands, setBrands] = useState<{ id: number; name: string; eng_name: string; slug: string; is_premium: boolean; category_group: string }[]>([]);
@@ -150,21 +191,7 @@ export default function Navigation() {
           </div>
 
           {/* Desktop Categories */}
-          <div className="hidden md:flex space-x-8 items-center">
-            {isVtonEnabled && (
-              <motion.div whileHover={{ y: -2 }} className="relative group mr-2">
-                <Link 
-                  href="/fitting-room" 
-                  className="px-4 py-1.5 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center gap-1"
-                  style={{ 
-                    backgroundColor: themeConfig.primaryColor || "#2563eb",
-                    borderRadius: getRadiusStyle(themeConfig.borderRadius)
-                  }}
-                >
-                  ✨ AI Fitting
-                </Link>
-              </motion.div>
-            )}
+          <div className="hidden md:flex gap-2 lg:gap-4 xl:gap-6 items-center shrink-0">
             
             {/* 브랜드관 드롭다운 메뉴 */}
             <div 
@@ -173,7 +200,7 @@ export default function Navigation() {
               onMouseLeave={() => setIsBrandOpen(false)}
             >
               <button
-                className="text-gray-700 dark:text-gray-300 font-bold hover:text-opacity-80 transition-colors flex items-center gap-1 cursor-pointer"
+                className="text-gray-700 dark:text-gray-300 font-bold hover:text-opacity-80 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
               >
                 브랜드관 <span className="text-[10px] opacity-75">▼</span>
               </button>
@@ -251,8 +278,8 @@ export default function Navigation() {
             {CATEGORIES.map((category) => (
               <motion.div key={category} whileHover={{ y: -2 }} className="relative group py-2">
                 <Link
-                  href={`/category/${category}`}
-                  className="text-gray-700 dark:text-gray-300 font-medium hover:text-opacity-80 transition-colors"
+                  href={CATEGORY_MAP[category] || `/category/${category}`}
+                  className="text-gray-700 dark:text-gray-300 font-medium hover:text-opacity-80 transition-colors whitespace-nowrap"
                 >
                   {category}
                 </Link>
@@ -304,10 +331,10 @@ export default function Navigation() {
             ))}
 
             {/* 1:1 문의 탭 추가 (작고 직관적인 아이콘 뱃지 스타일) */}
-            <motion.div whileHover={{ y: -2 }} className="relative group ml-4 border-l border-slate-300 dark:border-slate-850 pl-4 flex items-center">
+            <motion.div whileHover={{ y: -2 }} className="relative group border-l border-slate-300 dark:border-slate-850 pl-2 lg:pl-4 flex items-center shrink-0">
               <Link
                 href="/mypage/support"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300 transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300 transition-all shadow-sm whitespace-nowrap"
               >
                 <MessageSquare size={12} className="text-blue-500" />
                 <span>1:1 문의</span>
@@ -316,35 +343,45 @@ export default function Navigation() {
           </div>
 
           {/* User Icons */}
-          <div className="hidden md:flex items-center space-x-6 text-gray-700 dark:text-gray-300">
-            <button onClick={() => alert("검색 기능은 준비 중입니다. 조만간 추가될 예정입니다!")} className="hover:text-opacity-80 transition"><Search size={22} /></button>
-            <div className="flex items-center space-x-3">
+          <div className="hidden md:flex items-center gap-3 lg:gap-6 text-gray-700 dark:text-gray-300 shrink-0 whitespace-nowrap">
+            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="hover:text-opacity-80 transition shrink-0">
+              {isSearchOpen ? <X size={22} /> : <Search size={22} />}
+            </button>
+            <div className="flex items-center gap-1.5 lg:gap-3 shrink-0 whitespace-nowrap">
               {user ? (
                 <>
-                  <Link href="/mypage" className="text-sm font-bold hover:underline" style={{ color: themeConfig.primaryColor || "#2563eb" }}>
+                  <Link href="/mypage" className="text-sm font-bold hover:underline shrink-0 whitespace-nowrap" style={{ color: themeConfig.primaryColor || "#2563eb" }}>
                     {user.name}님
                   </Link>
                   {user.role === "ADMIN" && (
-                    <Link href="/admin" title="관리자 설정" className="hover:text-opacity-80 transition flex items-center">
+                    <Link href="/admin" title="관리자 설정" className="hover:text-opacity-80 transition flex items-center shrink-0">
                       <Settings size={20} />
                     </Link>
                   )}
-                  <button onClick={() => logout()} title="로그아웃" className="hover:text-red-500 transition"><LogOut size={20} /></button>
+                  <button onClick={() => logout()} title="로그아웃" className="hover:text-red-500 transition shrink-0"><LogOut size={20} /></button>
                 </>
               ) : (
-                <Link href="/login" title="로그인/가입" className="hover:text-opacity-80 transition"><User size={22} /></Link>
+                <Link href="/login" title="로그인/가입" className="hover:text-opacity-80 transition shrink-0"><User size={22} /></Link>
               )}
             </div>
             {isCheckoutEnabled && (
-              <Link href="/cart" className="hover:text-opacity-80 transition relative">
+              <Link href="/cart" className="hover:text-opacity-80 transition relative shrink-0">
                 <ShoppingBag size={22} />
               </Link>
             )}
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-gray-700 dark:text-gray-300">
+          <div className="md:hidden flex items-center gap-4">
+            {isCheckoutEnabled && (
+              <Link href="/cart" className="text-gray-750 dark:text-gray-250 hover:text-opacity-80 transition relative shrink-0">
+                <ShoppingBag size={22} />
+              </Link>
+            )}
+            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-gray-750 dark:text-gray-250 hover:text-opacity-80 transition shrink-0">
+              {isSearchOpen ? <X size={22} /> : <Search size={22} />}
+            </button>
+            <button onClick={() => setIsOpen(!isOpen)} className="text-gray-750 dark:text-gray-250">
               {isOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
           </div>
@@ -361,11 +398,25 @@ export default function Navigation() {
             className="md:hidden glass-panel border-t border-white/10"
           >
             <div className="px-4 py-6 space-y-4 flex flex-col">
+              {/* 모바일 상시 검색창 */}
+              <form onSubmit={handleSearchSubmit} className="relative w-full">
+                <Search size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="상품명을 검색해 보세요..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </form>
+
               {isVtonEnabled && (
-                <Link
-                  href="/fitting-room"
-                  onClick={() => setIsOpen(false)}
-                  className="text-lg font-bold text-white shadow-lg flex items-center gap-2"
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    alert("곧 구현될 예정입니다.");
+                  }}
+                  className="text-lg font-bold text-white shadow-lg flex items-center gap-2 w-full text-left"
                   style={{ 
                     backgroundImage: `linear-gradient(135deg, ${themeConfig.primaryColor || "#2563eb"}, ${themeConfig.secondaryColor || "#4f46e5"})`,
                     borderRadius: getRadiusStyle(themeConfig.borderRadius),
@@ -373,7 +424,7 @@ export default function Navigation() {
                   }}
                 >
                   ✨ Premium AI Fitting
-                </Link>
+                </button>
               )}
               {user?.role === "ADMIN" && (
                 <Link
@@ -439,7 +490,7 @@ export default function Navigation() {
               {CATEGORIES.map((category) => (
                 <Link
                   key={category}
-                  href={`/category/${category}`}
+                  href={CATEGORY_MAP[category] || `/category/${category}`}
                   onClick={() => setIsOpen(false)}
                   className="text-lg font-semibold text-gray-800 dark:text-gray-200"
                 >
@@ -457,6 +508,36 @@ export default function Navigation() {
                 <span>1:1 고객 문의하기</span>
               </Link>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* 2차 검색창 드롭다운 (애니메이션 슬라이드) */}
+      <AnimatePresence>
+        {isSearchOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 py-3 px-4 shadow-lg"
+          >
+            <form onSubmit={handleSearchSubmit} className="max-w-3xl mx-auto flex items-center gap-2">
+              <Search className="text-slate-400 shrink-0" size={20} />
+              <input
+                type="text"
+                placeholder="찾으시는 프리미엄 상품명을 입력하세요..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-slate-800 dark:text-white placeholder-slate-400"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shadow-md"
+              >
+                검색
+              </button>
+            </form>
           </motion.div>
         )}
       </AnimatePresence>

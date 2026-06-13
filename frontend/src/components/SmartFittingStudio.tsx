@@ -45,6 +45,8 @@ const getWatchAccPosition = (id: number) => {
 };
 
 export default function SmartFittingStudio() {
+  // 마운트 시 강제 리다이렉트 로직 제거 완료
+
   const [activeTab, setActiveTab] = useState<Category>("Top");
   const [selectedTop, setSelectedTop] = useState<Product | null>(null);
   const [selectedBottom, setSelectedBottom] = useState<Product | null>(null);
@@ -152,8 +154,8 @@ export default function SmartFittingStudio() {
           name: item.product_name,
           category: getFitCategory(item.product_category, item.transparent_image || ""),
           price: item.product_price,
-          thumb: item.transparent_image || item.product_image || "https://cdn-icons-png.flaticon.com/512/863/863684.png",
-          layerImgUrl: item.transparent_image || ""
+          thumb: item.product_image || item.transparent_image || "https://cdn-icons-png.flaticon.com/512/863/863684.png", // 목록 썸네일은 원본 메인 이미지를 우선 노출
+          layerImgUrl: item.transparent_image || "" // 마네킹 맵핑 시에만 투명 누끼 이미지 사용
         }));
         
         // 장바구니에 담긴 데이터가 없으면 폴백 데이터 구성
@@ -274,6 +276,7 @@ export default function SmartFittingStudio() {
     }
 
     // 일반 상/하의 믹스앤매치 합성
+    const startTime = Date.now();
     setIsRendering(true);
     setRenderMessage(`AI가 '${product.name}' 구조 분석 및 마네킹 핏 합성 중입니다 (Outfitting Fusion)...`);
 
@@ -291,16 +294,25 @@ export default function SmartFittingStudio() {
       if (!res.ok) throw new Error("Backend VTON API Error");
       
       const data = await res.json();
-      if (data.result_url) {
-         setFinalVtonImage(data.result_url);
-      } else {
-         setFinalVtonImage(targetGender === "female" ? "/mockups/woman_base.png" : "/mockups/man_base.png");
-      }
+      
+      // 최소 1.8초(1800ms) 동안 로딩 연출 보장
+      const elapsed = Date.now() - startTime;
+      const minLoadingTime = 1800; 
+      const remainingTime = Math.max(0, minLoadingTime - elapsed);
+      
+      setTimeout(() => {
+        if (data.result_url) {
+           setFinalVtonImage(data.result_url);
+        } else {
+           setFinalVtonImage(targetGender === "female" ? "/mockups/woman_base.png" : "/mockups/man_base.png");
+        }
+        setIsRendering(false);
+      }, remainingTime);
+
     } catch (error) {
       console.error(error);
-      setFinalVtonImage(targetGender === "female" ? "/mockups/woman_base.png" : "/mockups/man_base.png");
-    } finally {
       setIsRendering(false);
+      setFinalVtonImage(targetGender === "female" ? "/mockups/woman_base.png" : "/mockups/man_base.png");
     }
   };
 

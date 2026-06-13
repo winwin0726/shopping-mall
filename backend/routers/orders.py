@@ -105,38 +105,43 @@ def create_order(
     # 결제 상태: 개발 모드에서만 즉시 PAID, 운영에서는 PENDING (이후 payment/verify 로 확정)
     payment_status = (payload.payment_status or "PAID") if settings.PAYMENTS_DEV_MODE else "PENDING"
 
-    new_order = Order(
-        user_id=current_user.id if current_user else payload.user_id,
-        order_number=payload.order_number,
-        customer_name=payload.customer_name,
-        customer_phone=payload.customer_phone,
-        total_amount=final_amount,
-        discount_amount=discount_amount,
-        used_points=points_used,
-        payment_method=payload.payment_method,
-        payment_status=payment_status,
-        payment_id=payload.payment_id
-    )
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
+    try:
+        new_order = Order(
+            user_id=current_user.id if current_user else payload.user_id,
+            order_number=payload.order_number,
+            customer_name=payload.customer_name,
+            customer_phone=payload.customer_phone,
+            total_amount=final_amount,
+            discount_amount=discount_amount,
+            used_points=points_used,
+            payment_method=payload.payment_method,
+            payment_status=payment_status,
+            payment_id=payload.payment_id
+        )
+        db.add(new_order)
+        db.flush()
 
-    for product, qty, unit_price in valid_items:
-        db.add(OrderItem(
-            order_id=new_order.id,
-            product_id=product.id,
-            quantity=qty,
-            unit_price=unit_price
-        ))
-        product.stock_quantity = (product.stock_quantity or 0) - qty  # 재고 차감
+        for product, qty, unit_price in valid_items:
+            db.add(OrderItem(
+                order_id=new_order.id,
+                product_id=product.id,
+                quantity=qty,
+                unit_price=unit_price
+            ))
+            product.stock_quantity = (product.stock_quantity or 0) - qty  # 재고 차감
 
-    # 쿠폰 사용처리 + 적립금 차감
-    if coupon:
-        coupon.is_used = True
-    if points_used > 0 and current_user:
-        current_user.reward_points = (current_user.reward_points or 0) - points_used
+        # 쿠폰 사용처리 + 적립금 차감
+        if coupon:
+            coupon.is_used = True
+        if points_used > 0 and current_user:
+            current_user.reward_points = (current_user.reward_points or 0) - points_used
 
-    db.commit()
+        db.commit()
+        db.refresh(new_order)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"주문 생성 실패 (롤백 수행): {e}")
+        raise HTTPException(status_code=500, detail="주문 처리 중 서버 내부 오류가 발생했습니다.")
     return {
         "status": "success",
         "order_id": new_order.id,
@@ -182,45 +187,50 @@ def checkout_cart(payload: CheckoutCartRequest, db: Session = Depends(get_db), c
 
     payment_status = "PAID" if settings.PAYMENTS_DEV_MODE else "PENDING"
 
-    # 2. 새 주문 생성 (서버 재계산 금액 사용)
-    order_number = f"ORD-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
-    new_order = Order(
-        user_id=current_user.id,
-        order_number=order_number,
-        customer_name=payload.customer_name,
-        customer_phone=payload.customer_phone,
-        total_amount=final_amount,
-        discount_amount=discount_amount,
-        used_points=points_used,
-        payment_method=payload.payment_method,
-        payment_status=payment_status,
-        payment_id=payload.payment_id,
-        shipping_postal_code=payload.shipping_postal_code,
-        shipping_address=payload.shipping_address,
-        shipping_address_detail=payload.shipping_address_detail
-    )
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
+    try:
+        # 2. 새 주문 생성 (서버 재계산 금액 사용)
+        order_number = f"ORD-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+        new_order = Order(
+            user_id=current_user.id,
+            order_number=order_number,
+            customer_name=payload.customer_name,
+            customer_phone=payload.customer_phone,
+            total_amount=final_amount,
+            discount_amount=discount_amount,
+            used_points=points_used,
+            payment_method=payload.payment_method,
+            payment_status=payment_status,
+            payment_id=payload.payment_id,
+            shipping_postal_code=payload.shipping_postal_code,
+            shipping_address=payload.shipping_address,
+            shipping_address_detail=payload.shipping_address_detail
+        )
+        db.add(new_order)
+        db.flush()
 
-    # 3. OrderItem 생성 + 재고 차감 + 장바구니 비우기
-    for cart_item, product, qty, unit_price in cart_rows:
-        db.add(OrderItem(
-            order_id=new_order.id,
-            product_id=product.id,
-            quantity=qty,
-            unit_price=unit_price
-        ))
-        product.stock_quantity = (product.stock_quantity or 0) - qty
-        db.delete(cart_item)
+        # 3. OrderItem 생성 + 재고 차감 + 장바구니 비우기
+        for cart_item, product, qty, unit_price in cart_rows:
+            db.add(OrderItem(
+                order_id=new_order.id,
+                product_id=product.id,
+                quantity=qty,
+                unit_price=unit_price
+            ))
+            product.stock_quantity = (product.stock_quantity or 0) - qty
+            db.delete(cart_item)
 
-    # 쿠폰 사용처리 + 적립금 차감
-    if coupon:
-        coupon.is_used = True
-    if points_used > 0:
-        current_user.reward_points = (current_user.reward_points or 0) - points_used
+        # 쿠폰 사용처리 + 적립금 차감
+        if coupon:
+            coupon.is_used = True
+        if points_used > 0:
+            current_user.reward_points = (current_user.reward_points or 0) - points_used
 
-    db.commit()
+        db.commit()
+        db.refresh(new_order)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"장바구니 체크아웃 실패 (롤백 수행): {e}")
+        raise HTTPException(status_code=500, detail="주문 처리 중 서버 내부 오류가 발생했습니다.")
     return {
         "status": "success",
         "order_number": order_number,
@@ -246,17 +256,24 @@ def get_my_orders(db: Session = Depends(get_db), current_user: User = Depends(ge
         items = o.items
         item_details = []
         product_names = []
-        
         for item in items:
             product = item.product
             prod_name = product.kr_name if product else "알 수 없는 상품"
             product_names.append(prod_name)
+            
+            image_url = None
+            if product:
+                if product.images and len(product.images) > 0:
+                    image_url = product.images[0]
+                else:
+                    image_url = product.ai_fitting_image_url
+
             item_details.append({
                 "product_id": item.product_id,
                 "product_name": prod_name,
                 "quantity": item.quantity,
                 "unit_price": item.unit_price,
-                "image_url": product.ai_fitting_image_url if product and product.ai_fitting_image_url else None
+                "image_url": image_url
             })
             
         summary_name = product_names[0] if product_names else "상품 없음"
@@ -464,14 +481,23 @@ async def verify_payment(payload: PaymentVerifyRequest, db: Session = Depends(ge
                 db.commit()
                 return {"status": "success", "message": "결제 및 금액 위변조 검증 완료"}
             else:
-                # 결제 금액 불일치 -> 조작 의심 혹은 다른 이슈
                 order.payment_status = "FORGED_AMOUNT"
                 db.commit()
-                # 원래는 여기서 자동 환불(Cancel) 콜도 즉시 쏴서 피해를 최소화해야 함
+                # 자동 환불(Cancel) 보상 트랜잭션 수행
+                try:
+                    cancel_res = await client.post("https://api.iamport.kr/payments/cancel", headers=headers, json={
+                        "imp_uid": payload.imp_uid,
+                        "reason": "결제 금액 위변조 감지 (서버 자동 취소)",
+                        "amount": paid_amount
+                    })
+                    cancel_res.raise_for_status()
+                    logger.warning(f"🚨 위변조 감지로 결제 강제 취소 완료 (imp_uid: {payload.imp_uid}, 환불금액: {paid_amount:,}원)")
+                except Exception as cancel_err:
+                    logger.error(f"❌ 위변조 결제 자동 취소 실패: {cancel_err}")
+                
                 raise HTTPException(status_code=400, detail="결제 금액이 위변조되었거나 일치하지 않습니다.")
 
     except httpx.HTTPError:
-        # 개발 모드에서만 PG 검증을 우회 (운영(PAYMENTS_DEV_MODE=False)에서는 실패 처리)
         if settings.PAYMENTS_DEV_MODE:
             order.payment_status = "PAID"
             order.payment_id = payload.imp_uid
@@ -480,4 +506,80 @@ async def verify_payment(payload: PaymentVerifyRequest, db: Session = Depends(ge
             return {"status": "success", "message": "[DEV MODE] 결제 확인(검증 우회). 운영 전 비활성화 필요."}
 
         raise HTTPException(status_code=500, detail="포트원 서버와 통신 중 오류가 발생했습니다.")
+
+class PortOneWebhook(BaseModel):
+    imp_uid: str
+    merchant_uid: str
+    status: str
+
+@router.post("/payment/webhook")
+async def receive_payment_webhook(payload: PortOneWebhook, db: Session = Depends(get_db)):
+    """
+    포트원 결제 상태 업데이트 웹훅 수신 엔드포인트.
+    사용자가 결제 완료 후 브라우저를 닫아도 서버에서 결제를 최종 확정합니다.
+    """
+    logger.info(f"📬 포트원 웹훅 수신: imp_uid={payload.imp_uid}, merchant_uid={payload.merchant_uid}, status={payload.status}")
+    
+    order = db.query(Order).filter(Order.order_number == payload.merchant_uid).first()
+    if not order:
+        logger.warning(f"⚠️ 웹훅 주문 미존재: merchant_uid={payload.merchant_uid}")
+        return {"status": "ignored", "message": "주문 미존재"}
+
+    # 멱등성 가드: 이미 처리되었으면 무시 (Early Return)
+    if order.payment_status in ("PAID", "FORGED_AMOUNT"):
+        logger.info(f"💡 이미 처리된 주문입니다. (상태: {order.payment_status})")
+        return {"status": "success", "message": "이미 처리됨"}
+
+    if payload.status == "paid":
+        PORTONE_API_KEY = os.getenv("PORTONE_API_KEY", "dummy_key")
+        PORTONE_API_SECRET = os.getenv("PORTONE_API_SECRET", "dummy_secret")
+        
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                token_res = await client.post("https://api.iamport.kr/users/getToken", json={
+                    "imp_key": PORTONE_API_KEY,
+                    "imp_secret": PORTONE_API_SECRET
+                })
+                token_res.raise_for_status()
+                access_token = token_res.json()["response"]["access_token"]
+                
+                headers = {"Authorization": f"Bearer {access_token}"}
+                payment_res = await client.get(f"https://api.iamport.kr/payments/{payload.imp_uid}", headers=headers)
+                payment_res.raise_for_status()
+                payment_data = payment_res.json()["response"]
+                
+                paid_amount = payment_data.get("amount", 0)
+                status = payment_data.get("status", "")
+                
+                if paid_amount == order.total_amount and status == "paid":
+                    order.payment_status = "PAID"
+                    order.payment_id = payload.imp_uid
+                    db.commit()
+                    logger.info(f"✅ 웹훅 검증 완료: 주문 {order.order_number} PAID 처리 완료")
+                    return {"status": "success", "message": "웹훅 검증 완료"}
+                else:
+                    order.payment_status = "FORGED_AMOUNT"
+                    db.commit()
+                    # 자동 환불
+                    try:
+                        cancel_res = await client.post("https://api.iamport.kr/payments/cancel", headers=headers, json={
+                            "imp_uid": payload.imp_uid,
+                            "reason": "웹훅 금액 위변조 감지 (서버 자동 취소)",
+                            "amount": paid_amount
+                        })
+                        cancel_res.raise_for_status()
+                        logger.warning(f"🚨 웹훅 위변조 감지로 결제 강제 취소 (imp_uid: {payload.imp_uid})")
+                    except Exception as cancel_err:
+                        logger.error(f"❌ 웹훅 위변조 자동 취소 실패: {cancel_err}")
+                    return {"status": "forged", "message": "위변조 의심 취소 처리"}
+        except Exception as e:
+            logger.error(f"❌ 웹훅 처리 에러: {e}")
+            if settings.PAYMENTS_DEV_MODE:
+                order.payment_status = "PAID"
+                order.payment_id = payload.imp_uid
+                db.commit()
+                return {"status": "success", "message": "[DEV MODE] 웹훅 처리 완료"}
+            raise HTTPException(status_code=500, detail="웹훅 처리 중 오류 발생")
+            
+    return {"status": "ignored", "message": "지원하지 않는 상태"}
 

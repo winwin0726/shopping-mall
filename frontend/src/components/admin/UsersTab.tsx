@@ -17,12 +17,12 @@ interface UserData {
 }
 
 const GRADE_LABELS: Record<number, { label: string; bgClass: string; textClass: string }> = {
-  0: { label: "관리자 (ADMIN)", bgClass: "bg-rose-500/10", textClass: "text-rose-400 border-rose-500/20" },
-  1: { label: "VVIP (적립 5%)", bgClass: "bg-pink-500/10", textClass: "text-pink-400 border-pink-500/20" },
-  2: { label: "VIP (적립 3%)", bgClass: "bg-purple-500/10", textClass: "text-purple-400 border-purple-500/20" },
-  3: { label: "우수회원 (적립 2%)", bgClass: "bg-blue-500/10", textClass: "text-blue-400 border-blue-500/20" },
-  4: { label: "일반회원 (적립 1%)", bgClass: "bg-slate-500/10", textClass: "text-slate-300 border-slate-500/20" },
-  5: { label: "미가입회원 (제한)", bgClass: "bg-amber-500/10", textClass: "text-amber-400 border-amber-500/20" },
+  0: { label: "관리자 (ADMIN)", bgClass: "bg-rose-50", textClass: "text-rose-700 border-rose-200" },
+  1: { label: "VVIP (적립 5%)", bgClass: "bg-pink-50", textClass: "text-pink-700 border-pink-200" },
+  2: { label: "VIP (적립 3%)", bgClass: "bg-purple-50", textClass: "text-purple-700 border-purple-200" },
+  3: { label: "우수회원 (적립 2%)", bgClass: "bg-blue-50", textClass: "text-blue-700 border-blue-200" },
+  4: { label: "일반회원 (적립 1%)", bgClass: "bg-slate-50", textClass: "text-slate-700 border-slate-200" },
+  5: { label: "미가입회원 (제한)", bgClass: "bg-amber-50", textClass: "text-amber-700 border-amber-200" },
 };
 
 export default function UsersTab() {
@@ -126,80 +126,80 @@ export default function UsersTab() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">회원 등급 및 혜택(적립금/쿠폰) 관리</h2>
-          <p className="text-slate-400">회원 등급 조정 및 수동 적립금 조율, 특별 금액권 할인쿠폰 발급 등의 고도화 혜택을 제어합니다.</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2 tracking-tight">회원 등급 및 혜택(적립금/쿠폰) 관리</h2>
+          <p className="text-slate-500">회원 등급 조정 및 수동 적립금 조율, 특별 금액권 할인쿠폰 발급 등의 고도화 혜택을 제어합니다.</p>
         </div>
         <button 
           onClick={fetchUsers} 
-          className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
+          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg flex items-center transition-colors border border-slate-200 font-medium"
         >
           <RefreshCw size={16} className={`mr-2 ${loading ? 'animate-spin' : ''}`} /> 새로고침
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-800 text-red-200 p-4 rounded-lg flex items-center">
-          <AlertCircle className="mr-3 text-red-400" size={20} />
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg flex items-center">
+          <AlertCircle className="mr-3 text-red-500" size={20} />
           {error}
         </div>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-800 border-b border-slate-700">
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">ID</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">회원 정보 (이름/이메일)</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">가입 상태</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">보유 적립금</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">회원 등급 (Grade)</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">시스템 권한</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">가입일</th>
-                <th className="p-4 text-xs font-semibold text-slate-300 uppercase tracking-wider text-right">혜택 관리</th>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">회원 정보 (이름/이메일)</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">가입 상태</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">보유 적립금</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">회원 등급 (Grade)</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">시스템 권한</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">가입일</th>
+                <th className="p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right">혜택 관리</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     로딩 중...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     가입된 회원 정보가 없습니다.
                   </td>
                 </tr>
               ) : (
                 users.map((user) => {
-                  const gradeInfo = GRADE_LABELS[user.grade] || { label: `등급 ${user.grade}`, bgClass: "bg-slate-500/10", textClass: "text-slate-300 border-slate-500/20" };
+                  const gradeInfo = GRADE_LABELS[user.grade] || { label: `등급 ${user.grade}`, bgClass: "bg-slate-50", textClass: "text-slate-700 border-slate-200" };
                   
                   return (
-                    <tr key={user.id} className="hover:bg-slate-800/50 transition-colors">
-                      <td className="p-4 text-slate-400">#{user.id}</td>
-                      <td className="p-4 font-medium text-white">
+                    <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4 text-slate-500">#{user.id}</td>
+                      <td className="p-4 font-medium text-slate-900">
                         <div className="flex items-center space-x-2">
-                          <UserIcon size={16} className="text-slate-500 flex-shrink-0" />
+                          <UserIcon size={16} className="text-slate-400 flex-shrink-0" />
                           <div>
                             <div className="font-semibold text-sm">{user.name || "이름 미입력"}</div>
-                            <div className="text-xs text-slate-400">{user.email}</div>
+                            <div className="text-xs text-slate-500">{user.email}</div>
                           </div>
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${user.is_active ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                        <span className={`px-2 py-1 rounded text-xs font-medium border ${user.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                           {user.is_active ? "활성" : "정지"}
                         </span>
                       </td>
-                      <td className="p-4 font-semibold text-amber-400">
+                      <td className="p-4 font-semibold text-amber-900">
                         <div className="flex items-center space-x-2">
-                          <Coins size={14} className="text-amber-500" />
+                          <Coins size={14} className="text-amber-800" />
                           <span>{(user.reward_points || 0).toLocaleString()}원</span>
                           <button
                             onClick={() => handleRewardPointsChange(user.id, user.reward_points || 0)}
-                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2 py-0.5 text-[10px] font-bold rounded border border-slate-700 transition-colors"
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 text-[10px] font-bold rounded border border-slate-200 transition-colors"
                           >
                             수정
                           </button>
@@ -213,7 +213,7 @@ export default function UsersTab() {
                           <select
                             value={user.grade}
                             onChange={(e) => handleGradeChange(user.id, parseInt(e.target.value))}
-                            className="bg-slate-800 hover:bg-slate-700 text-white text-xs border border-slate-700 rounded px-2 py-1 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer transition-all"
+                            className="bg-white hover:bg-slate-50 text-slate-800 text-xs border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer transition-all"
                           >
                             <option value={0}>0등급 - 관리자</option>
                             <option value={1}>1등급 - VVIP (5%)</option>
@@ -225,18 +225,18 @@ export default function UsersTab() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold inline-flex items-center ${user.role === 'ADMIN' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
-                          {user.role === 'ADMIN' ? <Shield size={12} className="mr-1" /> : <ShieldOff size={12} className="mr-1" />}
+                        <span className={`px-2 py-1 rounded text-xs font-bold inline-flex items-center border ${user.role === 'ADMIN' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                          {user.role === 'ADMIN' ? <Shield size={12} className="mr-1 text-rose-600" /> : <ShieldOff size={12} className="mr-1 text-blue-600" />}
                           {user.role || "USER"}
                         </span>
                       </td>
-                      <td className="p-4 text-slate-400 text-sm">
+                      <td className="p-4 text-slate-500 text-sm">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
                       </td>
                       <td className="p-4 text-right">
                         <button
                           onClick={() => handleIssueCoupon(user.id, user.name || user.email)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-md transition-colors inline-flex items-center space-x-1"
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1"
                         >
                           <Ticket size={12} />
                           <span>쿠폰 발급</span>

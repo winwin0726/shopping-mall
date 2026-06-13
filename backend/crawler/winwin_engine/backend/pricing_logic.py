@@ -4,6 +4,13 @@ import datetime
 import os
 import json
 
+def interpolate_smooth_value(x, x1, x2, y1, y2):
+    if x <= x1:
+        return y1
+    if x >= x2:
+        return y2
+    return y1 + (x - x1) * (y2 - y1) / (x2 - x1)
+
 VENDOR_RULES_CACHE = None
 VENDOR_RULES_MTIME = 0
 
@@ -400,11 +407,25 @@ def generate_product_code_and_price(vendor_name, cost_input, category_name, prod
 
     if specific_cat == '가방':
         offset_val = custom_offset_val if has_custom_offset else 105
-        if cost < 500: base_plus = 50000
-        elif cost < 1000: base_plus = 70000
-        elif cost < 1500: base_plus = 80000
-        elif cost < 2000: base_plus = 100000
-        else: base_plus = 120000
+        # base_plus 스무딩 보간 처리 (경계선 ±20위안)
+        if cost < 480:
+            base_plus = 50000
+        elif 480 <= cost <= 520:
+            base_plus = interpolate_smooth_value(cost, 480, 520, 50000, 70000)
+        elif 520 < cost < 980:
+            base_plus = 70000
+        elif 980 <= cost <= 1020:
+            base_plus = interpolate_smooth_value(cost, 980, 1020, 70000, 80000)
+        elif 1020 < cost < 1480:
+            base_plus = 80000
+        elif 1480 <= cost <= 1520:
+            base_plus = interpolate_smooth_value(cost, 1480, 1520, 80000, 100000)
+        elif 1520 < cost < 1980:
+            base_plus = 100000
+        elif 1980 <= cost <= 2020:
+            base_plus = interpolate_smooth_value(cost, 1980, 2020, 100000, 120000)
+        else:
+            base_plus = 120000
         dg_val_won = (cost + 15 + offset_val) * fx * margins['가방_기본배수'] + base_plus
 
     elif specific_cat == '지갑':
@@ -413,14 +434,22 @@ def generate_product_code_and_price(vendor_name, cost_input, category_name, prod
 
     elif specific_cat == '부츠' or specific_cat == '일반신발':
         offset_val = custom_offset_val if has_custom_offset else 75
-        if cost < 200:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['일반신발_기본배수'] + 30000
-        elif cost < 300:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['일반신발_기본배수'] + 35000
-        elif cost < 500:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['일반신발_기본배수'] + 45000
+        # base_plus 스무딩 보간 처리 (경계선 ±15위안)
+        if cost < 185:
+            base_plus = 30000
+        elif 185 <= cost <= 215:
+            base_plus = interpolate_smooth_value(cost, 185, 215, 30000, 35000)
+        elif 215 < cost < 285:
+            base_plus = 35000
+        elif 285 <= cost <= 315:
+            base_plus = interpolate_smooth_value(cost, 285, 315, 35000, 45000)
+        elif 315 < cost < 485:
+            base_plus = 45000
+        elif 485 <= cost <= 515:
+            base_plus = interpolate_smooth_value(cost, 485, 515, 45000, 50000)
         else:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['일반신발_기본배수'] + 50000
+            base_plus = 50000
+        dg_val_won = (cost + 13 + offset_val) * fx * margins['일반신발_기본배수'] + base_plus
         item_code = 'S'
 
     elif specific_cat == '일반의류' or specific_cat == '바지':
@@ -437,10 +466,14 @@ def generate_product_code_and_price(vendor_name, cost_input, category_name, prod
 
     elif specific_cat == '시계':
         offset_val = custom_offset_val if has_custom_offset else 85
-        if cost < 500:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['시계_배수_낮음']
+        # 마진 배수 스무딩 보간 처리 (경계선 500 ±20위안)
+        if cost < 480:
+            watch_margin = margins['시계_배수_낮음']
+        elif 480 <= cost <= 520:
+            watch_margin = interpolate_smooth_value(cost, 480, 520, margins['시계_배수_낮음'], margins['시계_배수_높음'])
         else:
-            dg_val_won = (cost + 13 + offset_val) * fx * margins['시계_배수_높음']
+            watch_margin = margins['시계_배수_높음']
+        dg_val_won = (cost + 13 + offset_val) * fx * watch_margin
 
     elif specific_cat == '악세사리':
         offset_val = custom_offset_val if has_custom_offset else 65

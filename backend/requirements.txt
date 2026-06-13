@@ -13,6 +13,8 @@ apscheduler                # 백그라운드 스케줄러
 # ── DB / Migration ──────────────────────────────────────────
 alembic
 psycopg2-binary            # PostgreSQL 사용 시 (SQLite 기본은 불필요하나 무해)
+pymysql                    # MySQL 커넥터
+cryptography               # MySQL 8.0+ 인증 연동용
 
 # ── Image / VTON ────────────────────────────────────────────
 Pillow                     # ai_engine/vton.py 이미지 합성 (top-level import)
